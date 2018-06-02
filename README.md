@@ -4,8 +4,7 @@ Command line tool to manage onpremise K8s clusters
 
 ## Build
 ```
-go get 
-go build
+make
 ```
 ## Usage
 ./pf9-clusteradm --help
