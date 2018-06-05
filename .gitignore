@@ -1,1 +1,6 @@
 bin
+pkg
+# vendored packages
+src/pf9-clusteradm/vendor/
+# binary artifacts
+src/pf9-clusteradm/pf9-clusteradm

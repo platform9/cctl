@@ -9,8 +9,6 @@ SHELL := /usr/bin/env bash
 BUILD_NUMBER ?= 10
 GITHASH := $(shell git rev-parse --short HEAD)
 CWD := $(shell pwd)
-BUILD_DIR := $(CWD)/build
-PACKAGE_ROOT := $(BUILD_DIR)/root
 PF9_VERSION ?= 5.5.0
 SRC_DIR := $(CWD)/src/pf9-clusteradm
 VERSION := $(PF9_VERSION)-$(BUILD_NUMBER)
@@ -19,13 +17,12 @@ DEP_BIN_GIT := https://github.com/golang/dep/releases/download/v0.4.1/dep-$(DETE
 DEP_BIN := $(CWD)/bin/dep
 BIN := pf9-clusteradm
 
-.PHONY: clean gopath depnolock
+.PHONY: clean clean-all gopath depnolock
 
 export GOPATH=$(CWD)
 export DEPNOLOCK=1 # issue with vboxsf (vagrant + vbox) : https://github.com/golang/dep/issues/947
 
 default: $(BIN)
-	tree $(BUILD_DIR) || true
 
 $(DEP_BIN):
 	mkdir $(CWD)/bin
