@@ -77,6 +77,12 @@
   version = "v1.1.0"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/platform9/pf9-clusteradm"
+  packages = ["cmd"]
+  revision = "12bf64705ac8f53b0bba69a72b74fe073eaa7bb7"
+
+[[projects]]
   name = "github.com/spf13/afero"
   packages = [
     ".",
@@ -156,6 +162,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "8850faae14fc47a22941c8d00e0d59d5050b0c63c6d1953ae1daa84019120176"
+  inputs-digest = "97fa00eac4b10911f92a9d1977dd2c90600c87e070819b1eb5d1fae5d3ba5fd8"
   solver-name = "gps-cdcl"
   solver-version = 1
