@@ -13,7 +13,7 @@ var cfgFile string
 var rootCmd = &cobra.Command{
 	Use: "pf9-clusteradm",
 	Long: `Platform9 tool for Kubernetes cluster management.
-This tool lets you create, scale, backup and restore 
+This tool lets you create, scale, backup and restore
 your on-premise Kubernetes cluster.`,
 }
 
