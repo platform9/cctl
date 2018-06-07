@@ -73,14 +73,8 @@
 [[projects]]
   name = "github.com/pelletier/go-toml"
   packages = ["."]
-  revision = "acdc4509485b587f5e675510c4f2c63e90ff68a8"
-  version = "v1.1.0"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/platform9/pf9-clusteradm"
-  packages = ["cmd"]
-  revision = "12bf64705ac8f53b0bba69a72b74fe073eaa7bb7"
+  revision = "c01d1270ff3e442a8a57cddc1c92dc1138598194"
+  version = "v1.2.0"
 
 [[projects]]
   name = "github.com/spf13/afero"
@@ -132,13 +126,13 @@
     "poly1305",
     "ssh"
   ]
-  revision = "df8d4716b3472e4a531c33cedbe537dae921a1a9"
+  revision = "b47b1587369238182299fe4dad77d05b8b461e06"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/sys"
   packages = ["unix"]
-  revision = "c11f84a56e43e20a78cee75a7c034031ecf57d1f"
+  revision = "9527bec2660bd847c050fda93a0f0c6dee0800bb"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -162,6 +156,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "97fa00eac4b10911f92a9d1977dd2c90600c87e070819b1eb5d1fae5d3ba5fd8"
+  inputs-digest = "1179c7c8f3ab2f45ca208854e2f03a94bc61d276469d5eaf8b3254d051414551"
   solver-name = "gps-cdcl"
   solver-version = 1

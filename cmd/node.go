@@ -12,7 +12,7 @@ var nodeCmd = &cobra.Command{
 	Short: "Adds a node to the cluster",
 	Run: func(cmd *cobra.Command, args []string) {
 		ip := cmd.Flag("ip").Value.String()
-		role := cmd.Flag("role").Value.String()
+		//role := cmd.Flag("role").Value.String()
 		sshConfig := &ssh.ClientConfig{
 			User: "root",
 			Auth: []ssh.AuthMethod{
