@@ -53,6 +53,14 @@
   name = "gopkg.in/yaml.v2"
   version = "2.2.1"
 
+[[constraint]]
+  name = "sigs.k8s.io/cluster-api"
+  branch = "master"
+
 [prune]
   go-tests = true
   unused-packages = true
+
+[[override]]
+  name = "k8s.io/client-go"
+  branch = "release-6.0"

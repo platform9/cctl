@@ -4,16 +4,18 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
+	"io/ioutil"
+	"log"
+	"path"
+
 	"github.com/google/easypki/pkg/certificate"
 	"github.com/google/easypki/pkg/easypki"
 	"github.com/google/easypki/pkg/store"
-	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
-	"io/ioutil"
-	"log"
-	"os"
-	"path"
+
+	sshconfig "github.com/platform9/ssh-provider/sshproviderconfig"
+	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
 const (
@@ -25,24 +27,38 @@ var clusterCmd = &cobra.Command{
 	Use:   "cluster",
 	Short: "Creates clusterspec in the current directory",
 	Run: func(cmd *cobra.Command, args []string) {
-		clusterSpec := new(ClusterSpec)
-		clusterSpec.Name = cmd.Flag("name").Value.String()
-		clusterSpec.ServiceNetwork = cmd.Flag("serviceNetwork").Value.String()
-		clusterSpec.PodNetwork = cmd.Flag("podNetwork").Value.String()
-		clusterSpec.Vip = cmd.Flag("vip").Value.String()
-		clusterSpec.Cacert = cmd.Flag("cacert").Value.String()
-		clusterSpec.Cakey = cmd.Flag("cakey").Value.String()
-		clusterSpec.Version = cmd.Flag("version").Value.String()
-		clusterSpec.Token = uuid.New().String()
-		if len(clusterSpec.Cacert) == 0 {
-			createRootCA()
-			clusterSpec.Cacert = readCA()
-			clusterSpec.Cakey = readKey()
-			os.RemoveAll(CERT_NAME)
-		}
+		clusterSpec := new(clusterv1.ClusterSpec)
+		clusterSpec.ClusterNetwork.Services.CIDRBlocks = []string{cmd.Flag("serviceNetwork").Value.String()}
+		clusterSpec.ClusterNetwork.Pods.CIDRBlocks = []string{cmd.Flag("podNetwork").Value.String()}
+		clusterSpec.ClusterNetwork.ServiceDomain = "cluster.local"
+		sshProviderConfig := new(sshconfig.SSHClusterProviderConfig)
+		sshProviderConfig.APIVersion = "sshproviderconfig/v1alpha1"
+		sshProviderConfig.Kind = "SSHClusterProviderConfig"
+		sshProviderConfig.CASecretName = ""
+		sshProviderConfig.APIServerCertSANs = []string{cmd.Flag("vip").Value.String()}
+		// clusterSpec.ProviderConfig.Value.Marshal(sshProviderConfig)
 		bytes, _ := yaml.Marshal(clusterSpec)
 		ioutil.WriteFile("./cluster-spec.yaml", bytes, 0600)
 		fmt.Println("Cluster spec written in current dir!")
+
+		// clusterSpec := new(ClusterSpec)
+		// clusterSpec.Name = cmd.Flag("name").Value.String()
+		// clusterSpec.ServiceNetwork = cmd.Flag("serviceNetwork").Value.String()
+		// clusterSpec.PodNetwork = cmd.Flag("podNetwork").Value.String()
+		// clusterSpec.Vip = cmd.Flag("vip").Value.String()
+		// clusterSpec.Cacert = cmd.Flag("cacert").Value.String()
+		// clusterSpec.Cakey = cmd.Flag("cakey").Value.String()
+		// clusterSpec.Version = cmd.Flag("version").Value.String()
+		// clusterSpec.Token = uuid.New().String()
+		// if len(clusterSpec.Cacert) == 0 {
+		// 	createRootCA()
+		// 	clusterSpec.Cacert = readCA()
+		// 	clusterSpec.Cakey = readKey()
+		// 	os.RemoveAll(CERT_NAME)
+		// }
+		// bytes, _ := yaml.Marshal(clusterSpec)
+		// ioutil.WriteFile("./cluster-spec.yaml", bytes, 0600)
+		// fmt.Println("Cluster spec written in current dir!")
 	},
 }
 
