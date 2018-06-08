@@ -2,9 +2,10 @@
 #
 # Usage:
 # make                 # builds the artifact
+# make ensure          # runs dep ensure which downloads the dependencies
 # make clean           # removes the artifact and the vendored packages
 # make clean-all       # same as make clean + removes the bin dir which houses dep
-# make container-build # build artifact on a Linux based container using the latest golang
+# make container-build # build artifact on a Linux based container using golang 1.10
 
 SHELL := /usr/bin/env bash
 BUILD_NUMBER ?= 10
