@@ -24,7 +24,6 @@ else
 	DEP_BIN := $(DEP_TEST)
 endif
 
-
 .PHONY: clean clean-all container-build default ensure
 
 default: $(BIN)
