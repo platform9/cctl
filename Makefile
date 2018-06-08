@@ -30,7 +30,7 @@ endif
 default: $(BIN)
 
 container-build:
-	docker run --rm -v $(PWD):$(PACKAGE_GOPATH) -w $(PACKAGE_GOPATH) golang:latest make
+	docker run --rm -v $(PWD):$(PACKAGE_GOPATH) -w $(PACKAGE_GOPATH) golang:1.10 make
 
 $(DEP_BIN):
 ifeq ($(DEP_BIN),$(CWD)/bin/dep)
