@@ -11,40 +11,43 @@ BUILD_NUMBER ?= 10
 GITHASH := $(shell git rev-parse --short HEAD)
 CWD := $(shell pwd)
 PF9_VERSION ?= 5.5.0
-TMP_DIR := /tmp/pf9-clusteradm
-TMP_SRC_DIR := $(TMP_DIR)/src
 VERSION := $(PF9_VERSION)-$(BUILD_NUMBER)
 DETECTED_OS := $(shell uname -s)
 DEP_BIN_GIT := https://github.com/golang/dep/releases/download/v0.4.1/dep-$(DETECTED_OS)-amd64
-DEP_BIN := $(CWD)/bin/dep
 BIN := pf9-clusteradm
+PACKAGE_GOPATH := /go/src/github.com/platform9/$(BIN)
+DEP_TEST=$(shell which dep)
 
-.PHONY: clean clean-all gopath depnolock container-build
+ifeq ($(DEP_TEST),)
+	DEP_BIN := $(CWD)/bin/dep
+else
+	DEP_BIN := $(DEP_TEST)
+endif
 
-export GOPATH=$(TMP_DIR)
-export DEPNOLOCK=1 # issue with vboxsf (vagrant + vbox) : https://github.com/golang/dep/issues/947
+
+.PHONY: clean clean-all container-build default ensure
 
 default: $(BIN)
 
 container-build:
-	docker run --rm -v $(PWD):/build -w /build golang:latest make
+	docker run --rm -v $(PWD):$(PACKAGE_GOPATH) -w $(PACKAGE_GOPATH) golang:latest make
 
 $(DEP_BIN):
-	mkdir $(CWD)/bin
-	wget $(DEP_BIN_GIT) -O $@
+ifeq ($(DEP_BIN),$(CWD)/bin/dep)
+	echo "Downloading dep from GitHub" &&\
+	mkdir -p $(CWD)/bin &&\
+	wget $(DEP_BIN_GIT) -O $(DEP_BIN) &&\
 	chmod +x $(DEP_BIN)
+endif
 
-$(BIN):  $(DEP_BIN)
-	mkdir -p $(TMP_SRC_DIR)
-	if [ ! -L $(TMP_SRC_DIR)/pf9-clusteradm ]; then\
-		ln -s $(CWD) $(TMP_SRC_DIR)/pf9-clusteradm;\
-	fi
-	pushd $(TMP_SRC_DIR)/pf9-clusteradm &&\
-	$(DEP_BIN) ensure -v &&\
-	go build main.go &&\
-	mv main $(BIN)
+ensure: $(DEP_BIN)
+	echo $(DEP_BIN)
+	$(DEP_BIN) ensure -v
+
+$(BIN): ensure
+	go build
 
 clean-all: clean
-	rm -rf bin $(TMP_DIR)
+	rm -rf bin
 clean:
-	rm -rf build
+	rm -rf $(BIN)
