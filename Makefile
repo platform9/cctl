@@ -49,5 +49,6 @@ $(BIN): ensure
 
 clean-all: clean
 	rm -rf bin
+
 clean:
 	rm -rf $(BIN)
