@@ -44,7 +44,7 @@ ensure: $(DEP_BIN)
 	echo $(DEP_BIN)
 	$(DEP_BIN) ensure -v
 
-$(BIN): ensure
+$(BIN):
 	go build
 
 clean-all: clean
