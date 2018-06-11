@@ -1,4 +1,4 @@
-package cmd
+package common
 
 import (
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"

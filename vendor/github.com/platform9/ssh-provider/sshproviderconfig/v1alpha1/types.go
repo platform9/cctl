@@ -2,7 +2,7 @@
 Copyright 2018 Platform 9 Systems, Inc.
 */
 
-package sshproviderconfig
+package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,8 +12,10 @@ import (
 type SSHMachineProviderConfig struct {
 	metav1.TypeMeta `json:",inline"`
 
-	Host          string   `json:"host"`
-	Port          int      `json:"port"`
+	Host string `json:"host"`
+	Port int    `json:"port"`
+
+	// The host's known SSH public keys
 	PublicKeys    []string `json:"publicKeys"`
 	SSHSecretName string   `json:"sshSecretName"`
 }

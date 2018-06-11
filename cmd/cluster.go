@@ -1,25 +1,13 @@
 package cmd
 
 import (
-	"crypto/x509"
-	"encoding/base64"
-	"fmt"
-	"io/ioutil"
 	"log"
-	"path"
-
-	"github.com/google/easypki/pkg/certificate"
-	"github.com/google/easypki/pkg/easypki"
-	"github.com/google/easypki/pkg/store"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	sshconfig "github.com/platform9/ssh-provider/sshproviderconfig"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
-)
-
-const (
-	CERT_NAME = "k8sca"
+	"github.com/platform9/pf9-clusteradm/statefileutil"
+	"github.com/platform9/pf9-clusteradm/common"
 )
 
 // clusterCmd represents the cluster command
@@ -27,77 +15,45 @@ var clusterCmd = &cobra.Command{
 	Use:   "cluster",
 	Short: "Creates clusterspec in the current directory",
 	Run: func(cmd *cobra.Command, args []string) {
-		cluster := new(clusterv1.Cluster)
-		cluster.Spec.ClusterNetwork.Services.CIDRBlocks = []string{cmd.Flag("serviceNetwork").Value.String()}
-		cluster.Spec.ClusterNetwork.Pods.CIDRBlocks = []string{cmd.Flag("podNetwork").Value.String()}
-		cluster.Spec.ClusterNetwork.ServiceDomain = "cluster.local"
-		sshProviderConfig := new(sshconfig.SSHClusterProviderConfig)
-		sshProviderConfig.APIVersion = "sshproviderconfig/v1alpha1"
-		sshProviderConfig.Kind = "SSHClusterProviderConfig"
-		sshProviderConfig.CASecretName = ""
-		sshProviderConfig.APIServerCertSANs = []string{cmd.Flag("vip").Value.String()}
-		statefile := new(ClusterState)
-		statefile.Cluster = *cluster
 
-		bytes, _ := yaml.Marshal(statefile)
-		ioutil.WriteFile("/tmp/cluster-state.yaml", bytes, 0600)
-		fmt.Println("State file written in tmp dir!")
+		sshProviderConfig, err := common.CreateSSHClusterProviderConfig(cmd)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-		// clusterSpec := new(ClusterSpec)
-		// clusterSpec.Name = cmd.Flag("name").Value.String()
-		// clusterSpec.ServiceNetwork = cmd.Flag("serviceNetwork").Value.String()
-		// clusterSpec.PodNetwork = cmd.Flag("podNetwork").Value.String()
-		// clusterSpec.Vip = cmd.Flag("vip").Value.String()
-		// clusterSpec.Cacert = cmd.Flag("cacert").Value.String()
-		// clusterSpec.Cakey = cmd.Flag("cakey").Value.String()
-		// clusterSpec.Version = cmd.Flag("version").Value.String()
-		// clusterSpec.Token = uuid.New().String()
-		// if len(clusterSpec.Cacert) == 0 {
-		// 	createRootCA()
-		// 	clusterSpec.Cacert = readCA()
-		// 	clusterSpec.Cakey = readKey()
-		// 	os.RemoveAll(CERT_NAME)
-		// }
-		// bytes, _ := yaml.Marshal(clusterSpec)
-		// ioutil.WriteFile("./cluster-spec.yaml", bytes, 0600)
-		// fmt.Println("Cluster spec written in current dir!")
+		cluster := clusterv1.Cluster{
+			TypeMeta: v1.TypeMeta{
+				Kind: "Cluster",
+			},
+			ObjectMeta: v1.ObjectMeta{
+				Name: cmd.Flag("name").Value.String(),
+			},
+			Spec: clusterv1.ClusterSpec{
+				ClusterNetwork: clusterv1.ClusterNetworkingConfig{
+					Services: clusterv1.NetworkRanges{
+						CIDRBlocks: []string{
+							cmd.Flag("serviceNetwork").Value.String(),
+						},
+					},
+					Pods: clusterv1.NetworkRanges{
+						CIDRBlocks: []string{
+							cmd.Flag("podNetwork").Value.String(),
+						},
+					},
+					ServiceDomain: "cluster.local",
+				},
+				ProviderConfig: *sshProviderConfig,
+			},
+		}
+		cs, err := statefileutil.ReadStateFile()
+    	if err != nil {
+    		log.Fatal(err)
+		}
+		cs.Cluster = cluster
+		cs.Extra.K8sVersion = cmd.Flag("version").Value.String()
+		cs.Extra.Vip = cmd.Flag("vip").Value.String()
+		statefileutil.WriteStateFile(&cs)
 	},
-}
-
-type router struct {
-	PKI *easypki.EasyPKI
-}
-
-func base64FileContent(filename string) string {
-	bytes, err := ioutil.ReadFile(filename)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return base64.StdEncoding.EncodeToString(bytes)
-}
-
-func readCA() string {
-	certFile := path.Join(CERT_NAME, "certs", CERT_NAME+".crt")
-	return base64FileContent(certFile)
-}
-
-func readKey() string {
-	keyFile := path.Join(CERT_NAME, "keys", CERT_NAME+".key")
-	return base64FileContent(keyFile)
-}
-
-func createRootCA() {
-	r := router{PKI: &easypki.EasyPKI{Store: &store.Local{}}}
-	var bundle *certificate.Bundle
-	req := &easypki.Request{
-		Name: CERT_NAME,
-		Template: &x509.Certificate{
-			IsCA: true,
-		},
-	}
-	if err := r.PKI.Sign(bundle, req); err != nil {
-		log.Fatal(err)
-	}
 }
 
 func init() {

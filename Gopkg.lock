@@ -189,12 +189,6 @@
   revision = "24818f796faf91cd76ec7bddd72458fbced7a6c1"
 
 [[projects]]
-  name = "github.com/google/uuid"
-  packages = ["."]
-  revision = "064e2069ce9c359c118179501254f67d7d37ba24"
-  version = "0.2"
-
-[[projects]]
   name = "github.com/googleapis/gnostic"
   packages = [
     "OpenAPIv2",
@@ -354,8 +348,11 @@
 [[projects]]
   branch = "master"
   name = "github.com/platform9/ssh-provider"
-  packages = ["sshproviderconfig"]
-  revision = "c3461fed3e48752f39ef713bc112efdddcf2eaba"
+  packages = [
+    "sshproviderconfig",
+    "sshproviderconfig/v1alpha1"
+  ]
+  revision = "f8fcc490b1308253dfa278283917cd737a93e3d4"
 
 [[projects]]
   name = "github.com/prometheus/client_golang"
@@ -396,8 +393,8 @@
     ".",
     "mem"
   ]
-  revision = "63644898a8da0bc22138abf860edaf5277b6102e"
-  version = "v1.1.0"
+  revision = "787d034dfe70e44075ccc060d346146ef53270ad"
+  version = "v1.1.1"
 
 [[projects]]
   name = "github.com/spf13/cast"
@@ -447,7 +444,7 @@
     "ssh",
     "ssh/terminal"
   ]
-  revision = "b47b1587369238182299fe4dad77d05b8b461e06"
+  revision = "8ac0e0d97ce45cd83d1d7243c060cb8461dda5e9"
 
 [[projects]]
   branch = "master"
@@ -464,7 +461,7 @@
     "trace",
     "websocket"
   ]
-  revision = "1e491301e022f8f977054da4c2d852decd59571f"
+  revision = "db08ff08e8622530d9ed3a0e8ac279f6d4c02196"
 
 [[projects]]
   branch = "master"
@@ -473,7 +470,7 @@
     "unix",
     "windows"
   ]
-  revision = "9527bec2660bd847c050fda93a0f0c6dee0800bb"
+  revision = "bff228c7b664c5fce602223a05fb708fd8654986"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -501,7 +498,7 @@
   branch = "master"
   name = "google.golang.org/genproto"
   packages = ["googleapis/rpc/status"]
-  revision = "81158efcc9f219c511e4d3c0d61a0e6e49c01a24"
+  revision = "32ee49c4dd805befd833990acba36cb75042378c"
 
 [[projects]]
   name = "google.golang.org/grpc"
@@ -858,7 +855,7 @@
     "pkg/util",
     "pkg/util/proto"
   ]
-  revision = "8a9b82f00b3a86eac24681da3f9fe6c34c01cea2"
+  revision = "bf40560368791a7dddfeea9b3cfcf89b34139f44"
 
 [[projects]]
   branch = "master"
@@ -868,11 +865,11 @@
     "pkg/apis/cluster/common",
     "pkg/apis/cluster/v1alpha1"
   ]
-  revision = "06d3b2eaf8fb7fc5c691dc57c3d1116d156d7c02"
+  revision = "64491c9e5f5b20126991b0bd721375c48100d644"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "6fbb562061dd5b316898636c309eff749e7532f2c93e7548880be4e1fed7dbb5"
+  inputs-digest = "3c0c5928e5c3598c4bdcb3b7768f3f6118899019a4597605aa7506393f811377"
   solver-name = "gps-cdcl"
   solver-version = 1
