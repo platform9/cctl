@@ -27,19 +27,21 @@ var clusterCmd = &cobra.Command{
 	Use:   "cluster",
 	Short: "Creates clusterspec in the current directory",
 	Run: func(cmd *cobra.Command, args []string) {
-		clusterSpec := new(clusterv1.ClusterSpec)
-		clusterSpec.ClusterNetwork.Services.CIDRBlocks = []string{cmd.Flag("serviceNetwork").Value.String()}
-		clusterSpec.ClusterNetwork.Pods.CIDRBlocks = []string{cmd.Flag("podNetwork").Value.String()}
-		clusterSpec.ClusterNetwork.ServiceDomain = "cluster.local"
+		cluster := new(clusterv1.Cluster)
+		cluster.Spec.ClusterNetwork.Services.CIDRBlocks = []string{cmd.Flag("serviceNetwork").Value.String()}
+		cluster.Spec.ClusterNetwork.Pods.CIDRBlocks = []string{cmd.Flag("podNetwork").Value.String()}
+		cluster.Spec.ClusterNetwork.ServiceDomain = "cluster.local"
 		sshProviderConfig := new(sshconfig.SSHClusterProviderConfig)
 		sshProviderConfig.APIVersion = "sshproviderconfig/v1alpha1"
 		sshProviderConfig.Kind = "SSHClusterProviderConfig"
 		sshProviderConfig.CASecretName = ""
 		sshProviderConfig.APIServerCertSANs = []string{cmd.Flag("vip").Value.String()}
-		// clusterSpec.ProviderConfig.Value.Marshal(sshProviderConfig)
-		bytes, _ := yaml.Marshal(clusterSpec)
-		ioutil.WriteFile("./cluster-spec.yaml", bytes, 0600)
-		fmt.Println("Cluster spec written in current dir!")
+		statefile := new(ClusterState)
+		statefile.Cluster = *cluster
+
+		bytes, _ := yaml.Marshal(statefile)
+		ioutil.WriteFile("/tmp/cluster-state.yaml", bytes, 0600)
+		fmt.Println("State file written in tmp dir!")
 
 		// clusterSpec := new(ClusterSpec)
 		// clusterSpec.Name = cmd.Flag("name").Value.String()
