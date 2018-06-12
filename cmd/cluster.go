@@ -1,13 +1,13 @@
 package cmd
 
 import (
-	"log"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"log"
 
-	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
-	"github.com/platform9/pf9-clusteradm/statefileutil"
 	"github.com/platform9/pf9-clusteradm/common"
+	"github.com/platform9/pf9-clusteradm/statefileutil"
+	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
 // clusterCmd represents the cluster command
@@ -23,10 +23,12 @@ var clusterCmd = &cobra.Command{
 
 		cluster := clusterv1.Cluster{
 			TypeMeta: v1.TypeMeta{
-				Kind: "Cluster",
+				Kind:       "Cluster",
+				APIVersion: "cluster.k8s.io/v1alpha1",
 			},
 			ObjectMeta: v1.ObjectMeta{
-				Name: cmd.Flag("name").Value.String(),
+				Name:              cmd.Flag("name").Value.String(),
+				CreationTimestamp: v1.Now(),
 			},
 			Spec: clusterv1.ClusterSpec{
 				ClusterNetwork: clusterv1.ClusterNetworkingConfig{
@@ -46,8 +48,8 @@ var clusterCmd = &cobra.Command{
 			},
 		}
 		cs, err := statefileutil.ReadStateFile()
-    	if err != nil {
-    		log.Fatal(err)
+		if err != nil {
+			log.Fatal(err)
 		}
 		cs.Cluster = cluster
 		cs.Extra.K8sVersion = cmd.Flag("version").Value.String()

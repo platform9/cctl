@@ -13,7 +13,17 @@ type ExtraOpts struct {
 }
 
 type ClusterState struct {
-	Cluster  clusterv1.Cluster   `yaml:"cluster"`
-	Machines []clusterv1.Machine `yaml:"machines"`
-	Extra    ExtraOpts           `yaml:"extra"`
+	SSHSecret []SSHSecret
+	Cluster   clusterv1.Cluster   `yaml:"cluster"`
+	Machines  []clusterv1.Machine `yaml:"machines"`
+	Extra     ExtraOpts           `yaml:"extra"`
+}
+
+type SSHSecret struct {
+	Name           string
+	SSHCredentials SSHCredentials
+}
+type SSHCredentials struct {
+	User       string
+	PrivateKey string
 }

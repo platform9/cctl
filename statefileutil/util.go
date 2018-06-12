@@ -1,12 +1,12 @@
 package statefileutil
 
 import (
-	"io/ioutil"
-	"os"
 	"github.com/ghodss/yaml"
-	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	"github.com/platform9/pf9-clusteradm/common"
+	"io/ioutil"
 	"log"
+	"os"
+	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
 const (
@@ -36,6 +36,9 @@ func ReadStateFile() (common.ClusterState, error) {
 	return *cs, nil
 }
 
+func Upsert(key string, value string) {
+
+}
 
 func WriteStateFile(cs *common.ClusterState) error {
 	if cs != nil {

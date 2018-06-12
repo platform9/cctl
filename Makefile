@@ -25,7 +25,7 @@ else
 	DEP_BIN := $(DEP_TEST)
 endif
 
-.PHONY: clean clean-all container-build default ensure
+.PHONY: clean clean-all container-build default ensure format
 
 default: $(BIN)
 
@@ -46,6 +46,10 @@ ensure: $(DEP_BIN)
 
 $(BIN):
 	go build
+
+format:
+	gofmt -w -s *.go
+	gofmt -w -s */*.go
 
 clean-all: clean
 	rm -rf bin

@@ -1,14 +1,14 @@
 package common
 
 import (
+	"crypto/x509"
+	"encoding/base64"
+	"github.com/google/easypki/pkg/certificate"
 	"github.com/google/easypki/pkg/easypki"
+	"github.com/google/easypki/pkg/store"
 	"io/ioutil"
 	"log"
-	"encoding/base64"
 	"path"
-	"github.com/google/easypki/pkg/store"
-	"github.com/google/easypki/pkg/certificate"
-	"crypto/x509"
 )
 
 const (
