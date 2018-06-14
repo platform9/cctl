@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"fmt"
+	"log"
+
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
-	"log"
 
 	"github.com/platform9/pf9-clusteradm/common"
 	"github.com/platform9/pf9-clusteradm/statefileutil"
@@ -11,7 +13,7 @@ import (
 )
 
 // clusterCmd represents the cluster command
-var clusterCmd = &cobra.Command{
+var clusterCmdCreate = &cobra.Command{
 	Use:   "cluster",
 	Short: "Creates clusterspec in the current directory",
 	Run: func(cmd *cobra.Command, args []string) {
@@ -58,13 +60,36 @@ var clusterCmd = &cobra.Command{
 	},
 }
 
+var clusterCmdDelete = &cobra.Command{
+	Use:   "cluster",
+	Short: "Deletes a node to the cluster",
+	Run: func(cmd *cobra.Command, args []string) {
+		// Stub code
+		fmt.Println("Running cluster delete")
+	},
+}
+
+var clusterCmdGet = &cobra.Command{
+	Use:   "cluster",
+	Short: "Get the cluster details",
+	Run: func(cmd *cobra.Command, args []string) {
+		// Stub code
+		fmt.Println("Running get cluster")
+	},
+}
+
 func init() {
-	createCmd.AddCommand(clusterCmd)
-	clusterCmd.Flags().String("name", "example-cluster", "Name of the cluster")
-	clusterCmd.Flags().String("serviceNetwork", "10.1.0.0/16", "Network CIDR for services e.g. 10.1.0.0/16")
-	clusterCmd.Flags().String("podNetwork", "10.2.0.0/16", "Network CIDR for pods e.g. 10.2.0.0.16")
-	clusterCmd.Flags().String("vip", "192.168.10.5", "VIP ip to be used for multi master setup")
-	clusterCmd.Flags().String("cacert", "", "Base64 encoded CA cert for compoenents to trust")
-	clusterCmd.Flags().String("cakey", "", "Base64 encoded CA key for signing certs")
-	clusterCmd.Flags().String("version", "1.10.2", "Kubernetes version")
+	createCmd.AddCommand(clusterCmdCreate)
+	clusterCmdCreate.Flags().String("name", "example-cluster", "Name of the cluster")
+	clusterCmdCreate.Flags().String("serviceNetwork", "10.1.0.0/16", "Network CIDR for services e.g. 10.1.0.0/16")
+	clusterCmdCreate.Flags().String("podNetwork", "10.2.0.0/16", "Network CIDR for pods e.g. 10.2.0.0.16")
+	clusterCmdCreate.Flags().String("vip", "192.168.10.5", "VIP ip to be used for multi master setup")
+	clusterCmdCreate.Flags().String("cacert", "", "Base64 encoded CA cert for compoenents to trust")
+	clusterCmdCreate.Flags().String("cakey", "", "Base64 encoded CA key for signing certs")
+	clusterCmdCreate.Flags().String("version", "1.10.2", "Kubernetes version")
+
+	deleteCmd.AddCommand(clusterCmdDelete)
+	deleteCmd.Flags().String("force", "", "Force delete a cluster")
+
+	getCmd.AddCommand(clusterCmdGet)
 }

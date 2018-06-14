@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/platform9/pf9-clusteradm/common"
 	"github.com/platform9/pf9-clusteradm/statefileutil"
 	"github.com/spf13/cobra"
@@ -12,7 +14,7 @@ import (
 )
 
 // nodeCmd represents the cluster command
-var nodeCmd = &cobra.Command{
+var nodeCmdCreate = &cobra.Command{
 	Use:   "node",
 	Short: "Adds a node to the cluster",
 	Run: func(cmd *cobra.Command, args []string) {
@@ -52,11 +54,37 @@ var nodeCmd = &cobra.Command{
 	},
 }
 
+var nodeCmdDelete = &cobra.Command{
+	Use:   "node",
+	Short: "Deletes a node to the cluster",
+	Run: func(cmd *cobra.Command, args []string) {
+		// Stub code
+		fmt.Println("Running node delete")
+	},
+}
+
+var nodeCmdGet = &cobra.Command{
+	Use:   "node",
+	Short: "Get a node",
+	Run: func(cmd *cobra.Command, args []string) {
+		// Stub code
+		fmt.Println("Running get node")
+		// TODO: Implement node/nodes
+	},
+}
+
 func init() {
-	addCmd.AddCommand(nodeCmd)
-	nodeCmd.Flags().String("ip", "10.0.0.1", "IP of the machine")
-	nodeCmd.Flags().Int("port", 22, "SSH port")
-	nodeCmd.Flags().String("role", "worker", "Role of the node. Can be master/worker")
-	nodeCmd.Flags().String("publicKeys", "", "Comma separated list of public host keys for the machine")
-	nodeCmd.Flags().String("sshSecretName", "sshSecret", "Name of the sshSecret to use")
+	createCmd.AddCommand(nodeCmdCreate)
+	nodeCmdCreate.Flags().String("ip", "10.0.0.1", "IP of the machine")
+	nodeCmdCreate.Flags().Int("port", 22, "SSH port")
+	nodeCmdCreate.Flags().String("role", "worker", "Role of the node. Can be master/worker")
+	nodeCmdCreate.Flags().String("publicKeys", "", "Comma separated list of public host keys for the machine")
+	nodeCmdCreate.Flags().String("sshSecretName", "sshSecret", "Name of the sshSecret to use")
+
+	deleteCmd.AddCommand(nodeCmdDelete)
+	nodeCmdDelete.Flags().String("name", "", "Node name")
+	nodeCmdDelete.Flags().String("force", "", "Force delete the node")
+
+	getCmd.AddCommand(nodeCmdGet)
+	nodeCmdGet.Flags().String("name", "", "Node name")
 }
