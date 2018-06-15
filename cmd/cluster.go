@@ -78,6 +78,33 @@ var clusterCmdGet = &cobra.Command{
 	},
 }
 
+var clusterCmdUpgrade = &cobra.Command{
+	Use:   "cluster",
+	Short: "Upgrade the cluster",
+	Run: func(cmd *cobra.Command, args []string) {
+		// Stub code
+		fmt.Println("Running Upgrade cluster")
+	},
+}
+
+var clusterCmdRecover = &cobra.Command{
+	Use:   "cluster",
+	Short: "Recover the cluster",
+	Run: func(cmd *cobra.Command, args []string) {
+		// Stub code
+		fmt.Println("Running Recover cluster")
+	},
+}
+
+var clusterCmdBackup = &cobra.Command{
+	Use:   "cluster",
+	Short: "Backup the cluster",
+	Run: func(cmd *cobra.Command, args []string) {
+		// Stub code
+		fmt.Println("Running Backup cluster")
+	},
+}
+
 func init() {
 	createCmd.AddCommand(clusterCmdCreate)
 	clusterCmdCreate.Flags().String("name", "example-cluster", "Name of the cluster")
@@ -92,4 +119,10 @@ func init() {
 	deleteCmd.Flags().String("force", "", "Force delete a cluster")
 
 	getCmd.AddCommand(clusterCmdGet)
+
+	upgradeCmd.AddCommand(clusterCmdUpgrade)
+
+	recoverCmd.AddCommand(clusterCmdRecover)
+
+	backupCmd.AddCommand(clusterCmdBackup)
 }

@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// createCmd represents the create command
+// getCmd represents the get command
 var getCmd = &cobra.Command{
 	Use:   "get",
 	Short: "Used to get resources",

@@ -13,7 +13,7 @@ import (
 	"log"
 )
 
-// nodeCmd represents the cluster command
+// nodeCmd represents the node create command
 var nodeCmdCreate = &cobra.Command{
 	Use:   "node",
 	Short: "Adds a node to the cluster",
