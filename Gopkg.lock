@@ -349,6 +349,7 @@
   branch = "master"
   name = "github.com/platform9/ssh-provider"
   packages = [
+    "machine",
     "sshproviderconfig",
     "sshproviderconfig/v1alpha1"
   ]
@@ -870,6 +871,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "3c0c5928e5c3598c4bdcb3b7768f3f6118899019a4597605aa7506393f811377"
+  inputs-digest = "8d941e9e30bf27afeddc98790ed593d2eff821f388fb0b976f3ccf8abd61a0bf"
   solver-name = "gps-cdcl"
   solver-version = 1

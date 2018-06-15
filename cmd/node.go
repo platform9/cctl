@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	sshMachineActuator "github.com/platform9/ssh-provider/machine"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 
 	"log"
@@ -49,7 +50,18 @@ var nodeCmdCreate = &cobra.Command{
 
 		machines := append(cs.Machines, machine)
 		cs.Machines = machines
+
+		actuator, err := sshMachineActuator.NewActuator()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		cluster := &cs.Cluster
 		// call the actuator
+		err = actuator.Create(cluster, &machine)
+		if err != nil {
+			log.Fatal(err)
+		}
 		statefileutil.WriteStateFile(&cs)
 	},
 }
