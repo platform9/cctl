@@ -6,10 +6,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// upgradeCmd represents the status command
+// upgradeCmd represents the upgrade command
 var upgradeCmd = &cobra.Command{
 	Use:   "upgrade",
-	Short: "Used to get status of the cluster",
+	Short: "Used to upgrade the cluster",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Upgrade called")
