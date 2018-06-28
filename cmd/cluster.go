@@ -113,16 +113,13 @@ func init() {
 	clusterCmdCreate.Flags().String("vip", "192.168.10.5", "VIP ip to be used for multi master setup")
 	clusterCmdCreate.Flags().String("cacert", "", "Base64 encoded CA cert for compoenents to trust")
 	clusterCmdCreate.Flags().String("cakey", "", "Base64 encoded CA key for signing certs")
-	clusterCmdCreate.Flags().String("version", "1.10.2", "Kubernetes version")
+	//clusterCmdCreate.Flags().String("version", "1.10.2", "Kubernetes version")
 
 	deleteCmd.AddCommand(clusterCmdDelete)
 	deleteCmd.Flags().String("force", "", "Force delete a cluster")
 
 	getCmd.AddCommand(clusterCmdGet)
-
 	upgradeCmd.AddCommand(clusterCmdUpgrade)
-
 	recoverCmd.AddCommand(clusterCmdRecover)
-
 	backupCmd.AddCommand(clusterCmdBackup)
 }

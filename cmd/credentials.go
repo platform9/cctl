@@ -4,11 +4,9 @@ import (
 	"io/ioutil"
 	"log"
 
-	"encoding/base64"
-
-	"github.com/platform9/pf9-clusteradm/common"
 	"github.com/platform9/pf9-clusteradm/statefileutil"
 	"github.com/spf13/cobra"
+	v1 "k8s.io/api/core/v1"
 )
 
 var credentialsCmdCreate = &cobra.Command{
@@ -19,10 +17,10 @@ var credentialsCmdCreate = &cobra.Command{
 		if err != nil {
 			log.Fatalf("Failed to read key file with err %v\n", err)
 		}
-		sshSecret := common.SSHSecret{
-			User:       cmd.Flag("user").Value.String(),
-			PrivateKey: base64.StdEncoding.EncodeToString(bytes),
-		}
+		sshSecret := v1.Secret{}
+		sshSecret.Data = map[string][]byte{}
+		sshSecret.Data["username"] = []byte(cmd.Flag("user").Value.String())
+		sshSecret.Data["privateKey"] = bytes
 		cs, err := statefileutil.ReadStateFile()
 		if err != nil {
 			log.Fatal(err)
