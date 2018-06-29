@@ -8,6 +8,12 @@
   revision = "75cd24fc2f2c2a2088577d12123ddee5f54e0675"
 
 [[projects]]
+  name = "github.com/Jeffail/gabs"
+  packages = ["."]
+  revision = "7a0fed31069aba77993a518cc2f37b28ee7aa883"
+  version = "1.1"
+
+[[projects]]
   name = "github.com/NYTimes/gziphandler"
   packages = ["."]
   revision = "2600fb119af974220d3916a5916d6e31176aac1b"
@@ -264,6 +270,12 @@
   version = "1.0.1"
 
 [[projects]]
+  name = "github.com/kr/fs"
+  packages = ["."]
+  revision = "1455def202f6e05b95cc7bfc7e8ae67ae5141eba"
+  version = "v0.1.0"
+
+[[projects]]
   name = "github.com/kubernetes-incubator/apiserver-builder"
   packages = ["pkg/builders"]
   revision = "14201e804a58a140011a0044b15331f477535f91"
@@ -346,14 +358,27 @@
   version = "v2.0.1"
 
 [[projects]]
+  name = "github.com/pkg/errors"
+  packages = ["."]
+  revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
+  version = "v0.8.0"
+
+[[projects]]
+  name = "github.com/pkg/sftp"
+  packages = ["."]
+  revision = "57673e38ea946592a59c26592b7e6fbda646975b"
+  version = "1.8.0"
+
+[[projects]]
   branch = "master"
   name = "github.com/platform9/ssh-provider"
   packages = [
     "machine",
+    "provisionedmachine",
     "sshproviderconfig",
     "sshproviderconfig/v1alpha1"
   ]
-  revision = "f8fcc490b1308253dfa278283917cd737a93e3d4"
+  revision = "2253a96d78851e9cb6bb3961fc8e814bdc6eced2"
 
 [[projects]]
   name = "github.com/prometheus/client_golang"
@@ -859,18 +884,50 @@
   revision = "bf40560368791a7dddfeea9b3cfcf89b34139f44"
 
 [[projects]]
-  branch = "master"
+  branch = "release-1.9"
+  name = "k8s.io/kubernetes"
+  packages = [
+    "cmd/kubeadm/app/apis/kubeadm",
+    "cmd/kubeadm/app/apis/kubeadm/v1alpha1",
+    "cmd/kubeadm/app/constants",
+    "cmd/kubeadm/app/features",
+    "pkg/apis/core",
+    "pkg/apis/core/helper",
+    "pkg/apis/core/v1/helper",
+    "pkg/apis/core/v1/helper/qos",
+    "pkg/kubelet/apis/kubeletconfig",
+    "pkg/kubelet/apis/kubeletconfig/scheme",
+    "pkg/kubelet/apis/kubeletconfig/v1alpha1",
+    "pkg/kubelet/qos",
+    "pkg/kubelet/types",
+    "pkg/master/ports",
+    "pkg/proxy/apis/kubeproxyconfig",
+    "pkg/proxy/apis/kubeproxyconfig/scheme",
+    "pkg/proxy/apis/kubeproxyconfig/v1alpha1",
+    "pkg/registry/core/service/allocator",
+    "pkg/registry/core/service/ipallocator",
+    "pkg/util/pointer",
+    "pkg/util/version"
+  ]
+  revision = "57729ea3d9a1b75f3fc7bbbadc597ba707d47c8a"
+
+[[projects]]
+  branch = "providerstatus"
   name = "sigs.k8s.io/cluster-api"
   packages = [
     "pkg/apis/cluster",
     "pkg/apis/cluster/common",
-    "pkg/apis/cluster/v1alpha1"
+    "pkg/apis/cluster/v1alpha1",
+    "pkg/client/clientset_generated/clientset/scheme",
+    "pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1",
+    "pkg/util"
   ]
-  revision = "64491c9e5f5b20126991b0bd721375c48100d644"
+  revision = "aeaac272fdadea993518f0616b38b167f269b9cb"
+  source = "github.com/dlipovetsky/cluster-api"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "8d941e9e30bf27afeddc98790ed593d2eff821f388fb0b976f3ccf8abd61a0bf"
+  inputs-digest = "6383ace7b22b0e7d9875795740692e1d502b8462a94d3c7264c3aedcb261daa8"
   solver-name = "gps-cdcl"
   solver-version = 1

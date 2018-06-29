@@ -38,5 +38,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&SSHClusterProviderConfig{},
 	)
+	scheme.AddKnownTypes(SchemeGroupVersion,
+		&SSHMachineProviderStatus{},
+	)
 	return nil
 }

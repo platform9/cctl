@@ -55,7 +55,8 @@
 
 [[constraint]]
   name = "sigs.k8s.io/cluster-api"
-  branch = "master"
+  source = "github.com/dlipovetsky/cluster-api"
+  branch = "providerstatus"
 
 [prune]
   go-tests = true

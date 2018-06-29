@@ -2,13 +2,17 @@ package cmd
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
+	"strconv"
 
 	"github.com/spf13/cobra"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/platform9/pf9-clusteradm/common"
 	"github.com/platform9/pf9-clusteradm/statefileutil"
+	certutil "k8s.io/client-go/util/cert"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
@@ -17,8 +21,15 @@ var clusterCmdCreate = &cobra.Command{
 	Use:   "cluster",
 	Short: "Creates clusterspec in the current directory",
 	Run: func(cmd *cobra.Command, args []string) {
+		routerID, err := strconv.Atoi(cmd.Flag("routerID").Value.String())
+		vip := cmd.Flag("vip").Value.String()
 
-		sshProviderConfig, err := common.CreateSSHClusterProviderConfig(cmd)
+		if err != nil {
+			log.Fatalf("Invalid routerId %v", err)
+		}
+
+		sshProviderConfig, err := common.CreateSSHClusterProviderConfig(routerID, vip)
+
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -54,10 +65,82 @@ var clusterCmdCreate = &cobra.Command{
 			log.Fatal(err)
 		}
 		cs.Cluster = cluster
-		cs.Extra.K8sVersion = cmd.Flag("version").Value.String()
-		cs.Extra.Vip = cmd.Flag("vip").Value.String()
+		cs.K8sVersion = common.K8S_VERSION
+		fillCASecrets(&cs, cmd)
+		fillSASecrets(&cs, cmd)
 		statefileutil.WriteStateFile(&cs)
 	},
+}
+
+func fillSASecrets(cs *common.ClusterState, cmd *cobra.Command) {
+	saPrivateKeyFile := cmd.Flag("saPrivateKey").Value.String()
+	saPublicKeyFile := cmd.Flag("saPublicKey").Value.String()
+	if len(saPrivateKeyFile) == 0 && len(saPublicKeyFile) == 0 {
+		key, err := certutil.NewPrivateKey()
+		if err != nil {
+			log.Fatalf("Failed to create a new key pair for service account with err %v\n", err)
+		}
+		err = common.WriteKey("/tmp", "sa", key)
+		if err != nil {
+			log.Fatalf("Failed to write key file with err %v\n", err)
+		}
+		err = common.WritePublicKey("/tmp", "sa", &key.PublicKey)
+		if err != nil {
+			log.Fatalf("Failed to write public key file with err %v\n", err)
+		}
+		saPrivateKeyFile = "/tmp/sa.key"
+		saPublicKeyFile = "/tmp/sa.pub"
+	} else if len(saPrivateKeyFile) == 0 || len(saPublicKeyFile) == 0 {
+		log.Fatalf("Both saPrivateKey and saPublicKey need to specified")
+	}
+	privatekey, err := ioutil.ReadFile(saPrivateKeyFile)
+	if err != nil {
+		log.Fatalf("Failed to read file %s with error %v", saPrivateKeyFile, err)
+	}
+	publickey, err := ioutil.ReadFile(saPublicKeyFile)
+	if err != nil {
+		log.Fatalf("Failed to read file %s with error %v", saPublicKeyFile, err)
+	}
+	caSecret := corev1.Secret{}
+	caSecret.Data = map[string][]byte{}
+	caSecret.Data["privatekey"] = privatekey
+	caSecret.Data["publickey"] = publickey
+	cs.ServiceAccountKey = &caSecret
+}
+
+func fillCASecrets(cs *common.ClusterState, cmd *cobra.Command) {
+	caKeyFile := cmd.Flag("cakey").Value.String()
+	caCertFile := cmd.Flag("cacert").Value.String()
+	log.Printf("Value = %s", cmd.Flag("cacert").Value.String())
+	if len(caKeyFile) == 0 && len(caCertFile) == 0 {
+		cert, key, err := common.NewCertificateAuthority()
+		if err != nil {
+			log.Fatalf("Failed to create CA with err %v\n", err)
+		}
+		err = common.WriteCertAndKey("/tmp", "rootca", cert, key)
+		if err != nil {
+			log.Fatalf("Failed to write CA to disk with err %v\n", err)
+		}
+		caKeyFile = "/tmp/rootca.key"
+		caCertFile = "/tmp/rootca.crt"
+	} else if len(caKeyFile) == 0 || len(caCertFile) == 0 { //if only one of them is empty
+		log.Fatalf("Both cacert and cakey need to specified")
+	}
+	tlscrt, err := ioutil.ReadFile(caCertFile)
+	if err != nil {
+		log.Fatalf("Failed to read file crt file %s with error %v", caCertFile, err)
+	}
+	tlskey, err := ioutil.ReadFile(caKeyFile)
+	if err != nil {
+		log.Fatalf("Failed to read key file %s with error %v", caKeyFile, err)
+	}
+	caSecret := corev1.Secret{}
+	caSecret.Data = map[string][]byte{}
+	caSecret.Data["tls.crt"] = tlscrt
+	caSecret.Data["tls.key"] = tlskey
+	cs.APIServerCA = &caSecret
+	cs.FrontProxyCA = &caSecret
+	cs.EtcdCA = &caSecret
 }
 
 var clusterCmdDelete = &cobra.Command{
@@ -111,8 +194,12 @@ func init() {
 	clusterCmdCreate.Flags().String("serviceNetwork", "10.1.0.0/16", "Network CIDR for services e.g. 10.1.0.0/16")
 	clusterCmdCreate.Flags().String("podNetwork", "10.2.0.0/16", "Network CIDR for pods e.g. 10.2.0.0.16")
 	clusterCmdCreate.Flags().String("vip", "192.168.10.5", "VIP ip to be used for multi master setup")
-	clusterCmdCreate.Flags().String("cacert", "", "Base64 encoded CA cert for compoenents to trust")
-	clusterCmdCreate.Flags().String("cakey", "", "Base64 encoded CA key for signing certs")
+	clusterCmdCreate.Flags().String("routerID", "42", "Router ID for keepalived for multi master setup")
+	clusterCmdCreate.Flags().String("cacert", "", "Location of file containing CA cert for components to trust")
+	clusterCmdCreate.Flags().String("cakey", "", "Location of file containing CA key for signing certs")
+	clusterCmdCreate.Flags().String("saPrivateKey", "", "Location of file containing private key used for sigining service account tokens")
+	clusterCmdCreate.Flags().String("saPublicKey", "", "Location of file containing public key used for sigining service account tokens")
+
 	//clusterCmdCreate.Flags().String("version", "1.10.2", "Kubernetes version")
 
 	deleteCmd.AddCommand(clusterCmdDelete)

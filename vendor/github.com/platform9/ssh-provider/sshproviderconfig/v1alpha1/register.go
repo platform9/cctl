@@ -7,15 +7,16 @@ package v1alpha1
 import (
 	"bytes"
 	"fmt"
+
+	"github.com/platform9/ssh-provider/sshproviderconfig"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"github.com/platform9/ssh-provider/sshproviderconfig"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
 // +k8s:deepcopy-gen=false
-type SSHProviderConfigCodec struct {
+type SSHProviderCodec struct {
 	encoder runtime.Encoder
 	decoder runtime.Decoder
 }
@@ -41,6 +42,12 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&SSHClusterProviderConfig{},
 	)
+	scheme.AddKnownTypes(SchemeGroupVersion,
+		&SSHMachineProviderStatus{},
+	)
+	scheme.AddKnownTypes(SchemeGroupVersion,
+		&SSHClusterProviderStatus{},
+	)
 	return nil
 }
 
@@ -55,7 +62,7 @@ func NewScheme() (*runtime.Scheme, error) {
 	return scheme, nil
 }
 
-func NewCodec() (*SSHProviderConfigCodec, error) {
+func NewCodec() (*SSHProviderCodec, error) {
 	scheme, err := NewScheme()
 	if err != nil {
 		return nil, err
@@ -65,14 +72,14 @@ func NewCodec() (*SSHProviderConfigCodec, error) {
 	if err != nil {
 		return nil, err
 	}
-	codec := SSHProviderConfigCodec{
+	codec := SSHProviderCodec{
 		encoder: encoder,
 		decoder: codecFactory.UniversalDecoder(SchemeGroupVersion),
 	}
 	return &codec, nil
 }
 
-func (codec *SSHProviderConfigCodec) DecodeFromProviderConfig(providerConfig clusterv1.ProviderConfig, out runtime.Object) (error) {
+func (codec *SSHProviderCodec) DecodeFromProviderConfig(providerConfig clusterv1.ProviderConfig, out runtime.Object) error {
 	_, _, err := codec.decoder.Decode(providerConfig.Value.Raw, nil, out)
 	if err != nil {
 		return fmt.Errorf("decoding failed: %v", err)
@@ -80,12 +87,30 @@ func (codec *SSHProviderConfigCodec) DecodeFromProviderConfig(providerConfig clu
 	return nil
 }
 
-func (codec *SSHProviderConfigCodec) EncodeToProviderConfig(in runtime.Object) (*clusterv1.ProviderConfig, error) {
+func (codec *SSHProviderCodec) EncodeToProviderConfig(in runtime.Object) (*clusterv1.ProviderConfig, error) {
 	var buf bytes.Buffer
 	if err := codec.encoder.Encode(in, &buf); err != nil {
 		return nil, fmt.Errorf("encoding failed: %v", err)
 	}
 	return &clusterv1.ProviderConfig{
+		Value: &runtime.RawExtension{Raw: buf.Bytes()},
+	}, nil
+}
+
+func (codec *SSHProviderCodec) DecodeFromProviderStatus(providerStatus clusterv1.ProviderStatus, out runtime.Object) error {
+	_, _, err := codec.decoder.Decode(providerStatus.Value.Raw, nil, out)
+	if err != nil {
+		return fmt.Errorf("decoding failed: %v", err)
+	}
+	return nil
+}
+
+func (codec *SSHProviderCodec) EncodeToProviderStatus(in runtime.Object) (*clusterv1.ProviderStatus, error) {
+	var buf bytes.Buffer
+	if err := codec.encoder.Encode(in, &buf); err != nil {
+		return nil, fmt.Errorf("encoding failed: %v", err)
+	}
+	return &clusterv1.ProviderStatus{
 		Value: &runtime.RawExtension{Raw: buf.Bytes()},
 	}, nil
 }

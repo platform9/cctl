@@ -20,6 +20,7 @@ package cluster
 
 import (
 	"fmt"
+
 	"github.com/kubernetes-incubator/apiserver-builder/pkg/builders"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
@@ -150,7 +151,8 @@ type MachineStatus struct {
 	Versions       *MachineVersionInfo
 	ErrorReason    *clustercommon.MachineStatusError
 	ErrorMessage   *string
-	ProviderStatus *pkgruntime.RawExtension
+	ProviderStatus ProviderStatus
+	Addresses      []corev1.NodeAddress
 }
 
 type MachineSpec struct {
@@ -162,6 +164,10 @@ type MachineSpec struct {
 	ConfigSource   *corev1.NodeConfigSource
 }
 
+type ProviderStatus struct {
+	Value *pkgruntime.RawExtension
+}
+
 type MachineVersionInfo struct {
 	Kubelet      string
 	ControlPlane string
@@ -170,6 +176,9 @@ type MachineVersionInfo struct {
 type ProviderConfig struct {
 	Value     *pkgruntime.RawExtension
 	ValueFrom *ProviderConfigSource
+}
+
+type ProviderConfigSource struct {
 }
 
 type MachineDeploymentSpec struct {
@@ -183,24 +192,6 @@ type MachineDeploymentSpec struct {
 	ProgressDeadlineSeconds *int32
 }
 
-type ProviderConfigSource struct {
-}
-
-type MachineDeploymentStrategy struct {
-	Type          clustercommon.MachineDeploymentStrategyType
-	RollingUpdate *MachineRollingUpdateDeployment
-}
-
-type MachineTemplateSpec struct {
-	metav1.ObjectMeta
-	Spec MachineSpec
-}
-
-type MachineRollingUpdateDeployment struct {
-	MaxUnavailable *utilintstr.IntOrString
-	MaxSurge       *utilintstr.IntOrString
-}
-
 // +genclient
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -210,6 +201,44 @@ type Cluster struct {
 	metav1.ObjectMeta
 	Spec   ClusterSpec
 	Status ClusterStatus
+}
+
+type MachineDeploymentStrategy struct {
+	Type          clustercommon.MachineDeploymentStrategyType
+	RollingUpdate *MachineRollingUpdateDeployment
+}
+
+type ClusterStatus struct {
+	APIEndpoints   []APIEndpoint
+	ErrorReason    clustercommon.ClusterStatusError
+	ErrorMessage   string
+	ProviderStatus ProviderStatus
+}
+
+type MachineRollingUpdateDeployment struct {
+	MaxUnavailable *utilintstr.IntOrString
+	MaxSurge       *utilintstr.IntOrString
+}
+
+type APIEndpoint struct {
+	Host string
+	Port int
+}
+
+type ClusterSpec struct {
+	ClusterNetwork ClusterNetworkingConfig
+	ProviderConfig ProviderConfig
+}
+
+type MachineTemplateSpec struct {
+	metav1.ObjectMeta
+	Spec MachineSpec
+}
+
+type ClusterNetworkingConfig struct {
+	Services      NetworkRanges
+	Pods          NetworkRanges
+	ServiceDomain string
 }
 
 // +genclient
@@ -223,11 +252,8 @@ type MachineSet struct {
 	Status MachineSetStatus
 }
 
-type ClusterStatus struct {
-	APIEndpoints   []APIEndpoint
-	ErrorReason    clustercommon.ClusterStatusError
-	ErrorMessage   string
-	ProviderStatus *pkgruntime.RawExtension
+type NetworkRanges struct {
+	CIDRBlocks []string
 }
 
 type MachineSetStatus struct {
@@ -240,31 +266,11 @@ type MachineSetStatus struct {
 	ErrorMessage         *string
 }
 
-type APIEndpoint struct {
-	Host string
-	Port int
-}
-
 type MachineSetSpec struct {
 	Replicas        *int32
 	MinReadySeconds int32
 	Selector        metav1.LabelSelector
 	Template        MachineTemplateSpec
-}
-
-type ClusterSpec struct {
-	ClusterNetwork ClusterNetworkingConfig
-	ProviderConfig ProviderConfig
-}
-
-type ClusterNetworkingConfig struct {
-	Services      NetworkRanges
-	Pods          NetworkRanges
-	ServiceDomain string
-}
-
-type NetworkRanges struct {
-	CIDRBlocks []string
 }
 
 //

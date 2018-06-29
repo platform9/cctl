@@ -20,12 +20,12 @@ var credentialsCmdCreate = &cobra.Command{
 		sshSecret := v1.Secret{}
 		sshSecret.Data = map[string][]byte{}
 		sshSecret.Data["username"] = []byte(cmd.Flag("user").Value.String())
-		sshSecret.Data["privateKey"] = bytes
+		sshSecret.Data["ssh-privatekey"] = bytes
 		cs, err := statefileutil.ReadStateFile()
 		if err != nil {
 			log.Fatal(err)
 		}
-		cs.SSHSecret = sshSecret
+		cs.SSHCredentials = &sshSecret
 		statefileutil.WriteStateFile(&cs)
 	},
 }

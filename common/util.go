@@ -2,18 +2,24 @@ package common
 
 import (
 	"log"
+	"net"
 
+	sshProvider "github.com/platform9/ssh-provider/sshproviderconfig/v1alpha1"
 	sshconfigv1 "github.com/platform9/ssh-provider/sshproviderconfig/v1alpha1"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
-func CreateSSHClusterProviderConfig(cmd *cobra.Command) (*clusterv1.ProviderConfig, error) {
+func CreateSSHClusterProviderConfig(routerID int, vip string) (*clusterv1.ProviderConfig, error) {
 	SSHClusterProviderConfig := sshconfigv1.SSHClusterProviderConfig{
 		TypeMeta: v1.TypeMeta{
 			APIVersion: "sshproviderconfig/v1alpha1",
 			Kind:       "SSHClusterProviderConfig",
+		},
+		VIPConfiguration: &sshProvider.VIPConfiguration{
+			IP:       net.ParseIP(vip),
+			RouterID: routerID,
 		},
 	}
 
