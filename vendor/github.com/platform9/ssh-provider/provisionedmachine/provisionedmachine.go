@@ -6,6 +6,7 @@ import (
 	"github.com/ghodss/yaml"
 	sshproviderv1 "github.com/platform9/ssh-provider/sshproviderconfig/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
 const configMapKey = `provisionedMachine`
@@ -24,7 +25,7 @@ type ProvisionedMachine struct {
 func NewFromConfigMap(cm *corev1.ConfigMap) (*ProvisionedMachine, error) {
 	pmString, ok := cm.Data[configMapKey]
 	if !ok {
-		return nil, fmt.Errorf("did not find %q key in ConfigMap", configMapKey)
+		return nil, fmt.Errorf("could not find %q key in ConfigMap", configMapKey)
 	}
 	pm := &ProvisionedMachine{}
 	err := yaml.Unmarshal([]byte(pmString), pm)
@@ -42,4 +43,10 @@ func (pm *ProvisionedMachine) ToConfigMap(cm *corev1.ConfigMap) error {
 	}
 	cm.Data[configMapKey] = string(bytes)
 	return nil
+}
+
+// Compatible verifies that the ProvisionedMachine can fulfill the specified
+// configuration of the Machine. If incompatible, returns a reason.
+func (pm *ProvisionedMachine) Compatible(m *clusterv1.Machine) (bool, string) {
+	return true, ""
 }

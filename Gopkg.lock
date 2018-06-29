@@ -38,12 +38,6 @@
   revision = "3a771d992973f24aa725d07868b467d1ddfceafb"
 
 [[projects]]
-  name = "github.com/boltdb/bolt"
-  packages = ["."]
-  revision = "2f1ce7a837dcb8da3ec595b1dac9d0632f0f99e8"
-  version = "v1.3.1"
-
-[[projects]]
   name = "github.com/coreos/etcd"
   packages = [
     "auth/authpb",
@@ -177,16 +171,6 @@
   name = "github.com/google/btree"
   packages = ["."]
   revision = "e89373fe6b4a7413d7acd6da1725b83ef713e6e4"
-
-[[projects]]
-  name = "github.com/google/easypki"
-  packages = [
-    "pkg/certificate",
-    "pkg/easypki",
-    "pkg/store"
-  ]
-  revision = "da29806f5b70ad69f35f13566768252e4d6588af"
-  version = "v1.1.0"
 
 [[projects]]
   branch = "master"
@@ -378,7 +362,7 @@
     "sshproviderconfig",
     "sshproviderconfig/v1alpha1"
   ]
-  revision = "2253a96d78851e9cb6bb3961fc8e814bdc6eced2"
+  revision = "31e0eebca3c44fcfc382921eceb7616be825272f"
 
 [[projects]]
   name = "github.com/prometheus/client_golang"
@@ -928,6 +912,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "6383ace7b22b0e7d9875795740692e1d502b8462a94d3c7264c3aedcb261daa8"
+  inputs-digest = "e21f8afa24e28cd9263f0404da609bacdb551333cbd59b32b97e8019e3dd39ac"
   solver-name = "gps-cdcl"
   solver-version = 1

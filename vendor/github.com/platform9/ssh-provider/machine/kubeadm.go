@@ -61,5 +61,9 @@ func (sa *SSHActuator) NewMasterConfiguration(cluster *clusterv1.Cluster, machin
 	}
 
 	kubeadmv1.SetDefaults_MasterConfiguration(masterConfiguration)
+	// Temporary fix for kubeadm types - See issue https://github.com/platform9/ssh-provider/issues/4
+	masterConfiguration.ImageRepository = ""
+	// Temporary fix end
+
 	return masterConfiguration, nil
 }

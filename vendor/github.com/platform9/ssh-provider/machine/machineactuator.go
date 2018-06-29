@@ -53,23 +53,10 @@ func NewActuator(provisionedMachineConfigMaps []*corev1.ConfigMap,
 }
 
 func (sa *SSHActuator) Create(cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
-	// caCert, ok := clusterCA.Data["ca.crt"]
-	// if !ok {
-	// 	return fmt.Errorf("error reading cluster CA certificate: %s", ok)
-	// }
-	// caKey, ok := clusterCA.Data["ca.key"]
-	// if !ok {
-	// 	return fmt.Errorf("error reading cluster CA private key: %s", ok)
-	// }
-
-	cm, err := sa.selectProvisionedMachine(machine)
+	cm, err := sa.ReserveProvisionedMachine(machine)
 	if err != nil {
-		return fmt.Errorf("error creating machine %q: failed to select provisioned machine: %s", machine.Name, err)
+		return fmt.Errorf("error creating machine: error reserving provisioned machine %q: %s", machine.Name, err)
 	}
-	// err = sa.linkProvisionedMachineWithMachine(cm, machine)
-	// if err != nil {
-	// 	return fmt.Errorf("error linking ProvisionedMachine ConfigMap %q and Machine %q: %s", cm.Name, machine.Name, err)
-	// }
 
 	client, err := sshClient(cm, sa.sshCredentials, sa.InsecureIgnoreHostKey)
 	if err != nil {
@@ -79,7 +66,7 @@ func (sa *SSHActuator) Create(cluster *clusterv1.Cluster, machine *clusterv1.Mac
 
 	pm, err := provisionedmachine.NewFromConfigMap(cm)
 	if err != nil {
-		return fmt.Errorf("error parsing ProvisionedMachine from ConfigMap %q: %s", cm.Name, err)
+		return fmt.Errorf("error creating machine: error parsing ProvisionedMachine from ConfigMap %q: %s", cm.Name, err)
 	}
 	if clusterutil.IsMaster(machine) {
 		if err := sa.createMaster(pm, cluster, machine, client); err != nil {
@@ -89,33 +76,6 @@ func (sa *SSHActuator) Create(cluster *clusterv1.Cluster, machine *clusterv1.Mac
 		if err := sa.createNode(cluster, machine, client); err != nil {
 			return fmt.Errorf("error creating machine %q: %s", machine.Name, err)
 		}
-	}
-	return nil
-}
-
-// TODO(dlipovetsky) Find a compatible ProvisionedMachine, or return an error
-func (sa *SSHActuator) selectProvisionedMachine(machine *clusterv1.Machine) (*corev1.ConfigMap, error) {
-	return sa.provisionedMachineConfigMaps[0], nil
-}
-
-// TODO(dlipovetsky) Persist changes
-func (sa *SSHActuator) linkProvisionedMachineWithMachine(cm *corev1.ConfigMap, machine *clusterv1.Machine) error {
-	pm, err := provisionedmachine.NewFromConfigMap(cm)
-	if err != nil {
-		return fmt.Errorf("error parsing ProvisionedMachine from ConfigMap %q: %s", cm.Name, err)
-	}
-	// Update ProvisionedMachine annotations
-	cm.Annotations["sshprovider.platform9.com/machine-name"] = machine.Name
-	// Update Machine annotations
-	machine.Annotations["sshprovider.platform9.com/provisionedmachine-name"] = cm.Name
-	// Update Machine.Status.ProviderStatus
-	sshProviderStatus := &sshconfigv1.SSHMachineProviderStatus{
-		SSHConfig: pm.SSHConfig,
-	}
-	if providerStatus, err := sa.sshProviderCodec.EncodeToProviderStatus(sshProviderStatus); err != nil {
-		return fmt.Errorf("error creating machine ProviderStatus: %s", err)
-	} else {
-		machine.Status.ProviderStatus = *providerStatus
 	}
 	return nil
 }
@@ -154,9 +114,8 @@ func (sa *SSHActuator) createMaster(pm *provisionedmachine.ProvisionedMachine, c
 	out, err = session.CombinedOutput("echo writing ca cert and key")
 	if err != nil {
 		return fmt.Errorf("error invoking ssh command %s", err)
-	} else {
-		log.Println(string(out))
 	}
+	log.Println(string(out))
 
 	session, err = client.NewSession()
 	defer session.Close()
@@ -166,9 +125,8 @@ func (sa *SSHActuator) createMaster(pm *provisionedmachine.ProvisionedMachine, c
 	out, err = session.CombinedOutput("/opt/bin/etcdadm init")
 	if err != nil {
 		return fmt.Errorf("error invoking ssh command %s", err)
-	} else {
-		log.Println(string(out))
 	}
+	log.Println(string(out))
 
 	session, err = client.NewSession()
 	defer session.Close()
@@ -178,9 +136,8 @@ func (sa *SSHActuator) createMaster(pm *provisionedmachine.ProvisionedMachine, c
 	out, err = session.CombinedOutput("/opt/bin/nodeadm init --cfg /tmp/nodeadm.yaml")
 	if err != nil {
 		return fmt.Errorf("error invoking ssh command %s", err)
-	} else {
-		log.Println(string(out))
 	}
+	log.Println(string(out))
 
 	// TODO(dlipovetsky) Update cluster CA Secret with actual CA
 
@@ -195,9 +152,8 @@ func (sa *SSHActuator) createNode(cluster *clusterv1.Cluster, machine *clusterv1
 	out, err := session.CombinedOutput("echo running nodeadm join")
 	if err != nil {
 		return fmt.Errorf("error invoking ssh command %s", err)
-	} else {
-		log.Println(out)
 	}
+	log.Println(out)
 	return nil
 }
 
