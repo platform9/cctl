@@ -20,6 +20,15 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
+func nodeAlreadyExists(ip string, cs common.ClusterState) bool {
+	for _, machine := range cs.Machines {
+		if machine.Name == ip {
+			return true
+		}
+	}
+	return false
+}
+
 // nodeCmd represents the node create command
 var nodeCmdCreate = &cobra.Command{
 	Use:   "node",
@@ -32,6 +41,15 @@ var nodeCmdCreate = &cobra.Command{
 
 		timestamp := v1.Now()
 		ip := cmd.Flag("ip").Value.String()
+
+		cs, err := statefileutil.ReadStateFile()
+		if err != nil {
+			log.Fatal(err)
+		}
+		if nodeAlreadyExists(ip, cs) {
+			log.Fatalf("Failed to add node, node already exists")
+		}
+
 		port, err := strconv.Atoi(cmd.Flag("port").Value.String())
 		if err != nil {
 			log.Fatalf("Invalid port %v", err)
@@ -74,11 +92,6 @@ var nodeCmdCreate = &cobra.Command{
 			machine.Spec.Roles = []clustercommon.MachineRole{clustercommon.NodeRole}
 		}
 
-		cs, err := statefileutil.ReadStateFile()
-		if err != nil {
-			log.Fatal(err)
-		}
-
 		provisionedMachine := pm.ProvisionedMachine{
 			SSHConfig: &sshproviderv1.SSHConfig{
 				Host:       ip,
@@ -90,6 +103,7 @@ var nodeCmdCreate = &cobra.Command{
 		cm := corev1.ConfigMap{}
 		cm.Data = map[string]string{}
 		provisionedMachine.ToConfigMap(&cm)
+		cs.ProvisionedMachines = append(cs.ProvisionedMachines, provisionedMachine)
 
 		machines := append(cs.Machines, machine)
 		cs.Machines = machines
@@ -103,10 +117,22 @@ var nodeCmdCreate = &cobra.Command{
 		}
 
 		cluster := &cs.Cluster
-		//call the actuator
 		err = actuator.Create(cluster, &machine)
 		if err != nil {
 			log.Fatal(err)
+		}
+		if role == "master" {
+			clusterProviderStatus := common.DecodeSSHClusterProviderStatus(cluster.Status.ProviderStatus)
+			if len(clusterProviderStatus.EtcdMembers) == 0 {
+				clusterProviderStatus.EtcdMembers = []sshproviderv1.EtcdMember{}
+			}
+			machineProviderStatus := common.DecodeSSHMachineProviderStatus(machine.Status.ProviderStatus)
+			clusterProviderStatus.EtcdMembers = append(clusterProviderStatus.EtcdMembers, *machineProviderStatus.EtcdMember)
+			status, err := common.EncodeSSHClusterProviderStatus(clusterProviderStatus)
+			if err != nil {
+				log.Fatalf("Failed to encode clusterProvider status with error %v", err)
+			}
+			cs.Cluster.Status.ProviderStatus = *status
 		}
 		statefileutil.WriteStateFile(&cs)
 	},

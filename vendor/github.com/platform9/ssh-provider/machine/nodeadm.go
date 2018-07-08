@@ -45,6 +45,8 @@ func (sa *SSHActuator) NewNodeadmConfiguration(pm *provisionedmachine.Provisione
 	cfg.VIPConfiguration.RouterID = cpc.VIPConfiguration.RouterID
 	cfg.VIPConfiguration.NetworkInterface = pm.VIPNetworkInterface
 	cfg.MasterConfiguration = *masterConfiguration.DeepCopy()
+	cfg.MasterConfiguration.API.AdvertiseAddress = cpc.VIPConfiguration.IP.String()
+	cfg.MasterConfiguration.APIServerCertSANs = []string{cpc.VIPConfiguration.IP.String(), pm.SSHConfig.Host}
 	return cfg, nil
 }
 
