@@ -4,7 +4,6 @@ import (
 	"log"
 	"net"
 
-	sshProvider "github.com/platform9/ssh-provider/sshproviderconfig/v1alpha1"
 	sshconfigv1 "github.com/platform9/ssh-provider/sshproviderconfig/v1alpha1"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,7 +16,7 @@ func CreateSSHClusterProviderConfig(routerID int, vip string) (*clusterv1.Provid
 			APIVersion: "sshproviderconfig/v1alpha1",
 			Kind:       "SSHClusterProviderConfig",
 		},
-		VIPConfiguration: &sshProvider.VIPConfiguration{
+		VIPConfiguration: &sshconfigv1.VIPConfiguration{
 			IP:       net.ParseIP(vip),
 			RouterID: routerID,
 		},
@@ -64,4 +63,55 @@ func DecodeSSHClusterProviderConfig(pc clusterv1.ProviderConfig) sshconfigv1.SSH
 	}
 	sshProviderConfigCodec.DecodeFromProviderConfig(pc, &config)
 	return config
+}
+
+func DecodeSSHMachineProviderStatus(machineProviderStatus clusterv1.ProviderStatus) sshconfigv1.SSHMachineProviderStatus {
+	config := sshconfigv1.SSHMachineProviderStatus{}
+
+	sshProviderConfigCodec, err := sshconfigv1.NewCodec()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if machineProviderStatus.Value != nil {
+		sshProviderConfigCodec.DecodeFromProviderStatus(machineProviderStatus, &config)
+	}
+	return config
+}
+
+func EncodeSSHMachineProviderStatus(machineProviderStatus sshconfigv1.SSHMachineProviderStatus) (*clusterv1.ProviderStatus, error) {
+	sshProviderConfigCodec, err := sshconfigv1.NewCodec()
+	if err != nil {
+		log.Fatal(err)
+	}
+	return sshProviderConfigCodec.EncodeToProviderStatus(machineProviderStatus.DeepCopyObject())
+}
+
+func EncodeSSHClusterProviderConfig(providerConfig sshconfigv1.SSHClusterProviderConfig) (*clusterv1.ProviderConfig, error) {
+	sshProviderConfigCodec, err := sshconfigv1.NewCodec()
+	if err != nil {
+		log.Fatal(err)
+	}
+	return sshProviderConfigCodec.EncodeToProviderConfig(providerConfig.DeepCopyObject())
+}
+
+func DecodeSSHClusterProviderStatus(clusterProviderStatus clusterv1.ProviderStatus) sshconfigv1.SSHClusterProviderStatus {
+	config := sshconfigv1.SSHClusterProviderStatus{}
+
+	sshProviderConfigCodec, err := sshconfigv1.NewCodec()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if clusterProviderStatus.Value != nil {
+		sshProviderConfigCodec.DecodeFromProviderStatus(clusterProviderStatus, &config)
+	}
+
+	return config
+}
+
+func EncodeSSHClusterProviderStatus(clusterProviderStatus sshconfigv1.SSHClusterProviderStatus) (*clusterv1.ProviderStatus, error) {
+	sshProviderConfigCodec, err := sshconfigv1.NewCodec()
+	if err != nil {
+		log.Fatal(err)
+	}
+	return sshProviderConfigCodec.EncodeToProviderStatus(clusterProviderStatus.DeepCopyObject())
 }
