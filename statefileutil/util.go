@@ -1,11 +1,13 @@
 package statefileutil
 
 import (
-	"github.com/ghodss/yaml"
-	"github.com/platform9/pf9-clusteradm/common"
 	"io/ioutil"
 	"log"
 	"os"
+
+	"github.com/ghodss/yaml"
+	"github.com/platform9/pf9-clusteradm/common"
+	pm "github.com/platform9/ssh-provider/provisionedmachine"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
@@ -19,6 +21,16 @@ func checkFileExists() (bool, error) {
 		return true, nil
 	}
 	return false, err
+}
+
+func GetProvisionedMachine(cs common.ClusterState, ip string) *pm.ProvisionedMachine {
+	for _, m := range cs.ProvisionedMachines {
+		if m.SSHConfig.Host == ip {
+			log.Printf("Found provisioned node for ip %s", ip)
+			return &m
+		}
+	}
+	return nil
 }
 
 func ReadStateFile() (common.ClusterState, error) {
