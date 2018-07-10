@@ -32,6 +32,7 @@ type SSHActuator struct {
 	apiServerCA                  *corev1.Secret
 	frontProxyCA                 *corev1.Secret
 	serviceAccountKey            *corev1.Secret
+	clusterToken                 *corev1.Secret
 }
 
 func NewActuator(provisionedMachineConfigMaps []*corev1.ConfigMap,
@@ -39,7 +40,8 @@ func NewActuator(provisionedMachineConfigMaps []*corev1.ConfigMap,
 	etcdCA *corev1.Secret,
 	apiServerCA *corev1.Secret,
 	frontProxyCA *corev1.Secret,
-	serviceAccountKey *corev1.Secret) (*SSHActuator, error) {
+	serviceAccountKey *corev1.Secret,
+	clusterToken *corev1.Secret) (*SSHActuator, error) {
 	codec, err := sshconfigv1.NewCodec()
 	if err != nil {
 		return nil, err
@@ -52,6 +54,7 @@ func NewActuator(provisionedMachineConfigMaps []*corev1.ConfigMap,
 		apiServerCA:                  apiServerCA,
 		frontProxyCA:                 frontProxyCA,
 		serviceAccountKey:            serviceAccountKey,
+		clusterToken:                 clusterToken,
 	}, nil
 }
 
@@ -201,6 +204,8 @@ func writeCA(sftp *sftp.Client, data []byte, fileName string) error {
 
 func (sa *SSHActuator) writeCAs(sftp *sftp.Client) error {
 	basePath := "/etc/kubernetes/pki"
+	//removeDir should ideally be unnecessary, will be removed in future
+	sftp.RemoveDirectory(basePath)
 	err := sftp.MkdirAll(basePath)
 	if err != nil {
 		return fmt.Errorf("error create remote directory %s, %v", basePath, err)
@@ -231,6 +236,8 @@ func (sa *SSHActuator) writeCAs(sftp *sftp.Client) error {
 	}
 
 	basePath = "/etc/etcd/pki"
+	//removeDir should ideally be unnecessary, will be removed in future
+	sftp.RemoveDirectory(basePath)
 	sftp.MkdirAll(basePath)
 	if err != nil {
 		return fmt.Errorf("error create remote directory %s, %v", basePath, err)
@@ -248,12 +255,21 @@ func (sa *SSHActuator) createNode(cluster *clusterv1.Cluster, machine *clusterv1
 	if err != nil {
 		return fmt.Errorf("error creating new SSH session for machine %q: %s", machine.Name, err)
 	}
-	out, err := session.CombinedOutput("echo running nodeadm join")
+	cmd := fmt.Sprintf("/opt/bin/nodeadm join --master %s --token %s --cahash %s",
+		getAPIEndPoint(cluster),
+		string(sa.clusterToken.Data["token"]),
+		string(sa.clusterToken.Data["cahash"]))
+	log.Printf("Nodeadm join command = %s", cmd)
+	out, err := session.CombinedOutput(cmd)
 	if err != nil {
 		return fmt.Errorf("error invoking ssh command %s", err)
 	}
-	log.Println(out)
+	log.Println(string(out))
 	return nil
+}
+
+func getAPIEndPoint(cluster *clusterv1.Cluster) string {
+	return fmt.Sprintf("%s:%d", cluster.Status.APIEndpoints[0].Host, cluster.Status.APIEndpoints[0].Port)
 }
 
 func (sa *SSHActuator) Delete(cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
