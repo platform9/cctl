@@ -362,7 +362,7 @@
     "sshproviderconfig",
     "sshproviderconfig/v1alpha1"
   ]
-  revision = "d5a69d12351951e1dfc7449922e771a5cb7d2a4c"
+  revision = "2cd0dba7e89f6f6269868722762eceba7ce15284"
 
 [[projects]]
   name = "github.com/prometheus/client_golang"
@@ -912,6 +912,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "632a2442ee4fcce43890753d1203e421b64637d1953b384fe20a685b2cd83876"
+  inputs-digest = "bae5ed7512ff6d231688e925035dd4b8a8769e3658f8d3505a0fd8af5490a36d"
   solver-name = "gps-cdcl"
   solver-version = 1
