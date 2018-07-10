@@ -9,6 +9,7 @@ import (
 	"github.com/platform9/pf9-clusteradm/common"
 	pm "github.com/platform9/ssh-provider/provisionedmachine"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
+	"sigs.k8s.io/cluster-api/pkg/util"
 )
 
 const (
@@ -23,7 +24,7 @@ func checkFileExists() (bool, error) {
 	return false, err
 }
 
-func GetProvisionedMachine(cs common.ClusterState, ip string) *pm.ProvisionedMachine {
+func GetProvisionedMachine(cs *common.ClusterState, ip string) *pm.ProvisionedMachine {
 	for _, m := range cs.ProvisionedMachines {
 		if m.SSHConfig.Host == ip {
 			log.Printf("Found provisioned node for ip %s", ip)
@@ -74,4 +75,13 @@ func GetMachinesSpec() ([]clusterv1.Machine, error) {
 		return cs.Machines, nil
 	}
 	return nil, err
+}
+
+func GetMaster(cs *common.ClusterState) *pm.ProvisionedMachine {
+	for _, machine := range cs.Machines {
+		if util.IsMaster(&machine) {
+			return GetProvisionedMachine(cs, machine.Name)
+		}
+	}
+	return nil
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/platform9/pf9-clusteradm/common"
+	"github.com/platform9/pf9-clusteradm/machine"
 	"github.com/platform9/pf9-clusteradm/statefileutil"
 	sshMachineActuator "github.com/platform9/ssh-provider/machine"
 	pm "github.com/platform9/ssh-provider/provisionedmachine"
@@ -108,8 +109,9 @@ var nodeCmdCreate = &cobra.Command{
 		machines := append(cs.Machines, machine)
 		cs.Machines = machines
 		var clusterToken *corev1.Secret
+		var kubeconfig []byte
 		if role == "worker" {
-			clusterToken = getSecretFromAvailableMaster(cs)
+			clusterToken, kubeconfig = getSecretAndConfigFromMaster(cs)
 			if clusterToken == nil {
 				log.Fatalf("Failed to add worker no master node available")
 			}
@@ -138,6 +140,10 @@ var nodeCmdCreate = &cobra.Command{
 		}
 		if role == "master" {
 			clusterProviderStatus := common.DecodeSSHClusterProviderStatus(cluster.Status.ProviderStatus)
+			endPoint := clusterv1.APIEndpoint{}
+			endPoint.Host = provisionedMachine.SSHConfig.Host
+			endPoint.Port = common.DEFAULT_APISERVER_PORT
+			cluster.Status.APIEndpoints = append(cluster.Status.APIEndpoints, endPoint)
 			if len(clusterProviderStatus.EtcdMembers) == 0 {
 				clusterProviderStatus.EtcdMembers = []sshproviderv1.EtcdMember{}
 			}
@@ -149,7 +155,10 @@ var nodeCmdCreate = &cobra.Command{
 			}
 			cs.Cluster.Status.ProviderStatus = *status
 		}
-
+		if role == "worker" {
+			client := getClientForMachine(&provisionedMachine, cs.SSHCredentials)
+			client.WriteFile("/etc/kubernetes/admin.conf", 0644, kubeconfig)
+		}
 		statefileutil.WriteStateFile(&cs)
 	},
 }
@@ -173,46 +182,43 @@ var nodeCmdGet = &cobra.Command{
 	},
 }
 
-func getSecretFromAvailableMaster(cs common.ClusterState) *corev1.Secret {
-	for _, m := range cs.Machines {
-		if common.IsMaster(m) {
-			log.Printf("Tyring to get cluster secret from Master %s", m.Name)
-			pm := statefileutil.GetProvisionedMachine(cs, m.Name)
-			if pm == nil {
-				log.Printf("Failed to get machine with ip %s", m.Name)
-				continue
-			}
-			client, err := common.SSHClient(pm, cs.SSHCredentials, true)
-			session, err := client.NewSession()
-			if err != nil {
-				log.Printf("Failed to create ssh session with error %v", err)
-				continue
-			}
-			output, err := session.CombinedOutput("/opt/bin/kubeadm token create --print-join-command")
-			if err != nil {
-				log.Printf("Could not get token from master %s", m.Name)
-				session.Close()
-				continue
-			}
-			values := strings.Split(string(output), " ")
-			//Successful output would be of the type
-			//kubeadm join <server:port> --token <token> --discovery-token-ca-cert-hash <sha>
-			if len(values) != 7 { //TODO Needs a better way but seems good-enough for now
-				log.Printf("Could not get token from master %s", m.Name)
-				continue
-			}
-			secret := corev1.Secret{}
-			server := []byte(values[2])
-			token := []byte(values[4])
-			cahash := []byte(values[6])
-			secret.Data = map[string][]byte{}
-			secret.Data["server"] = server
-			secret.Data["token"] = token
-			secret.Data["cahash"] = cahash
-			return &secret
-		}
+func getClientForMachine(pm *pm.ProvisionedMachine, credentials *corev1.Secret) machine.Client {
+	client, err := machine.NewClient(pm.SSHConfig.Host,
+		pm.SSHConfig.Port,
+		string(credentials.Data["username"]),
+		string(credentials.Data["ssh-privatekey"]),
+		pm.SSHConfig.PublicKeys, true)
+	if err != nil {
+		log.Fatalf("Failed to get client for machine %s", pm.SSHConfig.Host)
 	}
-	return nil
+	return client
+}
+
+func getSecretAndConfigFromMaster(cs common.ClusterState) (*corev1.Secret, []byte) {
+	pm := statefileutil.GetMaster(&cs)
+	client := getClientForMachine(pm, cs.SSHCredentials)
+	output, errOutput, err := client.RunCommand("/opt/bin/kubeadm token create --print-join-command")
+	if err != nil {
+		log.Fatalf("Could not get token from master %s", pm.SSHConfig.Host)
+		log.Fatalf(string(errOutput))
+	}
+	values := strings.Split(string(output), " ")
+	//Successful output would be of the type
+	//kubeadm join <server:port> --token <token> --discovery-token-ca-cert-hash <sha>
+	if len(values) != 7 { //TODO Needs a better way but seems good-enough for now
+		log.Fatalf("Could not get token from master %s", pm.SSHConfig.Host)
+	}
+	secret := corev1.Secret{}
+	token := []byte(values[4])
+	cahash := []byte(values[6])
+	secret.Data = map[string][]byte{}
+	secret.Data["token"] = token
+	secret.Data["cahash"] = cahash
+	bytes, err := client.ReadFile("/etc/kubernetes/admin.conf")
+	if err != nil {
+		log.Fatalf("Failed to get kubeconfig with err %v", err)
+	}
+	return &secret, bytes
 }
 
 func init() {
