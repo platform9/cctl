@@ -107,8 +107,23 @@ var nodeCmdCreate = &cobra.Command{
 
 		machines := append(cs.Machines, machine)
 		cs.Machines = machines
+		var clusterToken *corev1.Secret
+		if role == "worker" {
+			clusterToken = getSecretFromAvailableMaster(cs)
+			if clusterToken == nil {
+				log.Fatalf("Failed to add worker no master node available")
+			}
+		}
 
-		actuator, err := sshMachineActuator.NewActuator([]*corev1.ConfigMap{&cm}, cs.SSHCredentials, cs.EtcdCA, cs.APIServerCA, cs.FrontProxyCA, cs.ServiceAccountKey)
+		actuator, err := sshMachineActuator.NewActuator([]*corev1.ConfigMap{&cm},
+			cs.SSHCredentials,
+			cs.EtcdCA,
+			cs.APIServerCA,
+			cs.FrontProxyCA,
+			cs.ServiceAccountKey,
+			clusterToken,
+		)
+
 		if len(publicKeys) == 0 {
 			actuator.InsecureIgnoreHostKey = true
 		}
@@ -134,6 +149,7 @@ var nodeCmdCreate = &cobra.Command{
 			}
 			cs.Cluster.Status.ProviderStatus = *status
 		}
+
 		statefileutil.WriteStateFile(&cs)
 	},
 }
@@ -157,8 +173,46 @@ var nodeCmdGet = &cobra.Command{
 	},
 }
 
-func getSecrets() (sshCredentials, etcdCA, apiServerCA, frontProxyCA, serviceAccountKey *corev1.Secret) {
-	return nil, nil, nil, nil, nil
+func getSecretFromAvailableMaster(cs common.ClusterState) *corev1.Secret {
+	for _, m := range cs.Machines {
+		if common.IsMaster(m) {
+			log.Printf("Tyring to get cluster secret from Master %s", m.Name)
+			pm := statefileutil.GetProvisionedMachine(cs, m.Name)
+			if pm == nil {
+				log.Printf("Failed to get machine with ip %s", m.Name)
+				continue
+			}
+			client, err := common.SSHClient(pm, cs.SSHCredentials, true)
+			session, err := client.NewSession()
+			if err != nil {
+				log.Printf("Failed to create ssh session with error %v", err)
+				continue
+			}
+			output, err := session.CombinedOutput("/opt/bin/kubeadm token create --print-join-command")
+			if err != nil {
+				log.Printf("Could not get token from master %s", m.Name)
+				session.Close()
+				continue
+			}
+			values := strings.Split(string(output), " ")
+			//Successful output would be of the type
+			//kubeadm join <server:port> --token <token> --discovery-token-ca-cert-hash <sha>
+			if len(values) != 7 { //TODO Needs a better way but seems good-enough for now
+				log.Printf("Could not get token from master %s", m.Name)
+				continue
+			}
+			secret := corev1.Secret{}
+			server := []byte(values[2])
+			token := []byte(values[4])
+			cahash := []byte(values[6])
+			secret.Data = map[string][]byte{}
+			secret.Data["server"] = server
+			secret.Data["token"] = token
+			secret.Data["cahash"] = cahash
+			return &secret
+		}
+	}
+	return nil
 }
 
 func init() {
