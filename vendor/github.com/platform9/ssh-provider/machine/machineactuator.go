@@ -26,16 +26,16 @@ type SSHActuator struct {
 	InsecureIgnoreHostKey bool
 	sshProviderCodec      *sshconfigv1.SSHProviderCodec
 
-	provisionedMachineConfigMaps []*corev1.ConfigMap
-	sshCredentials               *corev1.Secret
-	etcdCA                       *corev1.Secret
-	apiServerCA                  *corev1.Secret
-	frontProxyCA                 *corev1.Secret
-	serviceAccountKey            *corev1.Secret
-	clusterToken                 *corev1.Secret
+	provisionedMachineConfigMap *corev1.ConfigMap
+	sshCredentials              *corev1.Secret
+	etcdCA                      *corev1.Secret
+	apiServerCA                 *corev1.Secret
+	frontProxyCA                *corev1.Secret
+	serviceAccountKey           *corev1.Secret
+	clusterToken                *corev1.Secret
 }
 
-func NewActuator(provisionedMachineConfigMaps []*corev1.ConfigMap,
+func NewActuator(provisionedMachineConfigMap *corev1.ConfigMap,
 	sshCredentials *corev1.Secret,
 	etcdCA *corev1.Secret,
 	apiServerCA *corev1.Secret,
@@ -47,32 +47,27 @@ func NewActuator(provisionedMachineConfigMaps []*corev1.ConfigMap,
 		return nil, err
 	}
 	return &SSHActuator{
-		sshProviderCodec:             codec,
-		provisionedMachineConfigMaps: provisionedMachineConfigMaps,
-		sshCredentials:               sshCredentials,
-		etcdCA:                       etcdCA,
-		apiServerCA:                  apiServerCA,
-		frontProxyCA:                 frontProxyCA,
-		serviceAccountKey:            serviceAccountKey,
-		clusterToken:                 clusterToken,
+		sshProviderCodec:            codec,
+		provisionedMachineConfigMap: provisionedMachineConfigMap,
+		sshCredentials:              sshCredentials,
+		etcdCA:                      etcdCA,
+		apiServerCA:                 apiServerCA,
+		frontProxyCA:                frontProxyCA,
+		serviceAccountKey:           serviceAccountKey,
+		clusterToken:                clusterToken,
 	}, nil
 }
 
 func (sa *SSHActuator) Create(cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
-	cm, err := sa.ReserveProvisionedMachine(machine)
-	if err != nil {
-		return fmt.Errorf("error creating machine: error reserving provisioned machine %q: %s", machine.Name, err)
-	}
-
-	client, err := sshClient(cm, sa.sshCredentials, sa.InsecureIgnoreHostKey)
+	client, err := sshClient(sa.provisionedMachineConfigMap, sa.sshCredentials, sa.InsecureIgnoreHostKey)
 	if err != nil {
 		return fmt.Errorf("error creating machine %q: failed to create SSH client: %s", machine.Name, err)
 	}
 	defer client.Close()
 
-	pm, err := provisionedmachine.NewFromConfigMap(cm)
+	pm, err := provisionedmachine.NewFromConfigMap(sa.provisionedMachineConfigMap)
 	if err != nil {
-		return fmt.Errorf("error creating machine: error parsing ProvisionedMachine from ConfigMap %q: %s", cm.Name, err)
+		return fmt.Errorf("error creating machine: error parsing ProvisionedMachine from ConfigMap %q: %s", sa.provisionedMachineConfigMap.Name, err)
 	}
 	if clusterutil.IsMaster(machine) {
 		if err := sa.createMaster(pm, cluster, machine, client); err != nil {
@@ -273,6 +268,32 @@ func getAPIEndPoint(cluster *clusterv1.Cluster) string {
 }
 
 func (sa *SSHActuator) Delete(cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
+	client, err := sshClient(sa.provisionedMachineConfigMap, sa.sshCredentials, sa.InsecureIgnoreHostKey)
+	if err != nil {
+		return fmt.Errorf("error deleting machine %q: failed to create SSH client: %s", machine.Name, err)
+	}
+	defer client.Close()
+	var session *ssh.Session
+	var out []byte
+	session, err = client.NewSession()
+	defer session.Close()
+	if err != nil {
+		return fmt.Errorf("error creating new SSH session for machine %q: %s", machine.Name, err)
+	}
+	cmd := "/opt/bin/nodeadm reset"
+	out, err = session.CombinedOutput(cmd)
+	if err != nil {
+		return fmt.Errorf("error invoking %q: %v", cmd, err)
+	}
+	log.Println(string(out))
+	if clusterutil.IsMaster(machine) {
+		cmd := "/opt/bin/etcdadm reset"
+		out, err := session.CombinedOutput(cmd)
+		if err != nil {
+			return fmt.Errorf("error invoking %q: %v", cmd, err)
+		}
+		log.Println(string(out))
+	}
 	return nil
 }
 

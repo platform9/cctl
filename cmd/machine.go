@@ -103,9 +103,8 @@ var machineCmdCreate = &cobra.Command{
 			VIPNetworkInterface: iface,
 		}
 
-		cm := corev1.ConfigMap{}
-		cm.Data = map[string]string{}
-		provisionedMachine.ToConfigMap(&cm)
+		cm := &corev1.ConfigMap{}
+		provisionedMachine.ToConfigMap(cm)
 		cs.ProvisionedMachines = append(cs.ProvisionedMachines, provisionedMachine)
 
 		machines := append(cs.Machines, machine)
@@ -119,7 +118,8 @@ var machineCmdCreate = &cobra.Command{
 			}
 		}
 
-		actuator, err := sshMachineActuator.NewActuator([]*corev1.ConfigMap{&cm},
+		actuator, err := sshMachineActuator.NewActuator(
+			cm,
 			cs.SSHCredentials,
 			cs.EtcdCA,
 			cs.APIServerCA,

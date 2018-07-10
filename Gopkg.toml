@@ -65,3 +65,7 @@
 [[override]]
   name = "k8s.io/client-go"
   branch = "release-6.0"
+
+[[constraint]]
+  name = "github.com/platform9/ssh-provider"
+  branch = "delete"
