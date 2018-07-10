@@ -7,7 +7,6 @@ import (
 	sshconfigv1 "github.com/platform9/ssh-provider/sshproviderconfig/v1alpha1"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
-	clustercommon "sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
@@ -115,13 +114,4 @@ func EncodeSSHClusterProviderStatus(clusterProviderStatus sshconfigv1.SSHCluster
 		log.Fatal(err)
 	}
 	return sshProviderConfigCodec.EncodeToProviderStatus(clusterProviderStatus.DeepCopyObject())
-}
-
-func IsMaster(machine clusterv1.Machine) bool {
-	for _, r := range machine.Spec.Roles {
-		if r == clustercommon.MasterRole {
-			return true
-		}
-	}
-	return false
 }
