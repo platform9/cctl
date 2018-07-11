@@ -362,7 +362,7 @@
     "sshproviderconfig",
     "sshproviderconfig/v1alpha1"
   ]
-  revision = "c292a459013596ae0151997d468eea8b60b1ff4c"
+  revision = "f07527c348b5a50ce640d6b1aaf73dbe7c94a2f3"
 
 [[projects]]
   name = "github.com/prometheus/client_golang"
