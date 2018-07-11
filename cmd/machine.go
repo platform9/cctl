@@ -21,7 +21,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
-func nodeAlreadyExists(ip string, cs common.ClusterState) bool {
+func machineAlreadyExists(ip string, cs common.ClusterState) bool {
 	for _, machine := range cs.Machines {
 		if machine.Name == ip {
 			return true
@@ -30,10 +30,10 @@ func nodeAlreadyExists(ip string, cs common.ClusterState) bool {
 	return false
 }
 
-// nodeCmd represents the node create command
-var nodeCmdCreate = &cobra.Command{
-	Use:   "node",
-	Short: "Adds a node to the cluster",
+// machineCmdCreate represents the machine create command
+var machineCmdCreate = &cobra.Command{
+	Use:   "machine",
+	Short: "Adds a machine to the cluster",
 	Run: func(cmd *cobra.Command, args []string) {
 		sshMachineProviderConfig, err := common.CreateSSHMachineProviderConfig(cmd)
 		if err != nil {
@@ -47,8 +47,8 @@ var nodeCmdCreate = &cobra.Command{
 		if err != nil {
 			log.Fatal(err)
 		}
-		if nodeAlreadyExists(ip, cs) {
-			log.Fatalf("Failed to add node, node already exists")
+		if machineAlreadyExists(ip, cs) {
+			log.Fatalf("Failed to add machine, machine already exists")
 		}
 
 		port, err := strconv.Atoi(cmd.Flag("port").Value.String())
@@ -89,7 +89,7 @@ var nodeCmdCreate = &cobra.Command{
 		role := cmd.Flag("role").Value.String()
 		if role == "master" {
 			machine.Spec.Roles = []clustercommon.MachineRole{clustercommon.MasterRole}
-		} else if role == "worker" {
+		} else if role == "node" {
 			machine.Spec.Roles = []clustercommon.MachineRole{clustercommon.NodeRole}
 		}
 
@@ -110,10 +110,10 @@ var nodeCmdCreate = &cobra.Command{
 		cs.Machines = machines
 		var clusterToken *corev1.Secret
 		var kubeconfig []byte
-		if role == "worker" {
+		if role == "node" {
 			clusterToken, kubeconfig = getSecretAndConfigFromMaster(cs)
 			if clusterToken == nil {
-				log.Fatalf("Failed to add worker no master node available")
+				log.Fatalf("Failed to add node. No master available")
 			}
 		}
 
@@ -155,7 +155,7 @@ var nodeCmdCreate = &cobra.Command{
 			}
 			cs.Cluster.Status.ProviderStatus = *status
 		}
-		if role == "worker" {
+		if role == "node" {
 			client := getClientForMachine(&provisionedMachine, cs.SSHCredentials)
 			client.WriteFile("/etc/kubernetes/admin.conf", 0644, kubeconfig)
 		}
@@ -163,22 +163,22 @@ var nodeCmdCreate = &cobra.Command{
 	},
 }
 
-var nodeCmdDelete = &cobra.Command{
-	Use:   "node",
-	Short: "Deletes a node to the cluster",
+var machineCmdDelete = &cobra.Command{
+	Use:   "machine",
+	Short: "Deletes a machine from the cluster",
 	Run: func(cmd *cobra.Command, args []string) {
 		// Stub code
-		fmt.Println("Running node delete")
+		fmt.Println("Running machine delete")
 	},
 }
 
-var nodeCmdGet = &cobra.Command{
-	Use:   "node",
-	Short: "Get a node",
+var machineCmdGet = &cobra.Command{
+	Use:   "machine",
+	Short: "Get a machine",
 	Run: func(cmd *cobra.Command, args []string) {
 		// Stub code
-		fmt.Println("Running get node")
-		// TODO: Implement node/nodes
+		fmt.Println("Running get machine")
+		// TODO: Implement machine/machines
 	},
 }
 
@@ -222,17 +222,17 @@ func getSecretAndConfigFromMaster(cs common.ClusterState) (*corev1.Secret, []byt
 }
 
 func init() {
-	createCmd.AddCommand(nodeCmdCreate)
-	nodeCmdCreate.Flags().String("ip", "10.0.0.1", "IP of the machine")
-	nodeCmdCreate.Flags().Int("port", 22, "SSH port")
-	nodeCmdCreate.Flags().String("role", "worker", "Role of the node. Can be master/worker")
-	nodeCmdCreate.Flags().String("publicKeys", "", "Comma separated list of public host keys for the machine")
-	nodeCmdCreate.Flags().String("sshSecretName", "sshSecret", "Name of the sshSecret to use")
+	createCmd.AddCommand(machineCmdCreate)
+	machineCmdCreate.Flags().String("ip", "10.0.0.1", "IP of the machine")
+	machineCmdCreate.Flags().Int("port", 22, "SSH port")
+	machineCmdCreate.Flags().String("role", "node", "Role of the machine. Can be master/node")
+	machineCmdCreate.Flags().String("publicKeys", "", "Comma separated list of public host keys for the machine")
+	machineCmdCreate.Flags().String("sshSecretName", "sshSecret", "Name of the sshSecret to use")
 
-	deleteCmd.AddCommand(nodeCmdDelete)
-	nodeCmdDelete.Flags().String("name", "", "Node name")
-	nodeCmdDelete.Flags().String("force", "", "Force delete the node")
+	deleteCmd.AddCommand(machineCmdDelete)
+	machineCmdDelete.Flags().String("name", "", "Machine name")
+	machineCmdDelete.Flags().String("force", "", "Force delete the machine")
 
-	getCmd.AddCommand(nodeCmdGet)
-	nodeCmdGet.Flags().String("name", "", "Node name")
+	getCmd.AddCommand(machineCmdGet)
+	machineCmdGet.Flags().String("name", "", "Machine name")
 }
