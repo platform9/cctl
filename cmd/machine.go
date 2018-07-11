@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	"io/ioutil"
 	"log"
@@ -21,6 +22,11 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
+var (
+	drainTimeout            time.Duration
+	drainGracePeriodSeconds int
+)
+
 func machineAlreadyExists(ip string, cs common.ClusterState) bool {
 	for _, machine := range cs.Machines {
 		if machine.Name == ip {
@@ -35,9 +41,9 @@ var machineCmdCreate = &cobra.Command{
 	Use:   "machine",
 	Short: "Adds a machine to the cluster",
 	Run: func(cmd *cobra.Command, args []string) {
-		sshMachineProviderConfig, err := common.CreateSSHMachineProviderConfig(cmd)
+		spv1Codec, err := sshproviderv1.NewCodec()
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("Could not initialize codec for internal types: %v", err)
 		}
 
 		timestamp := v1.Now()
@@ -70,6 +76,28 @@ var machineCmdCreate = &cobra.Command{
 			}
 		}
 
+		sshMachineProviderConfig := &sshproviderv1.SSHMachineProviderConfig{
+			TypeMeta: v1.TypeMeta{
+				APIVersion: "sshproviderconfig/v1alpha1",
+				Kind:       "SSHMachineProviderConfig",
+			},
+		}
+		providerConfig, err := spv1Codec.EncodeToProviderConfig(sshMachineProviderConfig)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		sshMachineProviderStatus := &sshproviderv1.SSHMachineProviderStatus{
+			TypeMeta: v1.TypeMeta{
+				APIVersion: "sshproviderconfig/v1alpha1",
+				Kind:       "SSHMachineProviderStatus",
+			},
+		}
+		providerStatus, err := spv1Codec.EncodeToProviderStatus(sshMachineProviderStatus)
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		machine := clusterv1.Machine{
 			TypeMeta: v1.TypeMeta{
 				Kind:       "Machine",
@@ -80,11 +108,11 @@ var machineCmdCreate = &cobra.Command{
 				CreationTimestamp: timestamp,
 			},
 			Spec: clusterv1.MachineSpec{
-				ObjectMeta: v1.ObjectMeta{
-					CreationTimestamp: timestamp,
-				},
 				Roles:          []clustercommon.MachineRole{clustercommon.MasterRole},
-				ProviderConfig: *sshMachineProviderConfig,
+				ProviderConfig: *providerConfig,
+			},
+			Status: clusterv1.MachineStatus{
+				ProviderStatus: *providerStatus,
 			},
 		}
 		role := cmd.Flag("role").Value.String()
@@ -103,8 +131,12 @@ var machineCmdCreate = &cobra.Command{
 			VIPNetworkInterface: iface,
 		}
 
-		cm := &corev1.ConfigMap{}
-		provisionedMachine.ToConfigMap(cm)
+		cm := &corev1.ConfigMap{
+			Data: make(map[string]string),
+		}
+		if err := provisionedMachine.ToConfigMap(cm); err != nil {
+			log.Fatalf("error reading state: %v", err)
+		}
 		cs.ProvisionedMachines = append(cs.ProvisionedMachines, provisionedMachine)
 
 		machines := append(cs.Machines, machine)
@@ -114,7 +146,7 @@ var machineCmdCreate = &cobra.Command{
 		if role == "node" {
 			clusterToken, kubeconfig = getSecretAndConfigFromMaster(cs)
 			if clusterToken == nil {
-				log.Fatalf("Failed to add node. No master available")
+				log.Fatalf("Failed to add . No master available")
 			}
 		}
 
@@ -141,7 +173,11 @@ var machineCmdCreate = &cobra.Command{
 			log.Fatal(err)
 		}
 		if role == "master" {
-			clusterProviderStatus := common.DecodeSSHClusterProviderStatus(cluster.Status.ProviderStatus)
+			clusterProviderStatus := sshproviderv1.SSHClusterProviderStatus{}
+			err := spv1Codec.DecodeFromProviderStatus(cluster.Status.ProviderStatus, &clusterProviderStatus)
+			if err != nil {
+				log.Fatalf("Failed to decode cluster ProviderStatus: %v", err)
+			}
 			endPoint := clusterv1.APIEndpoint{}
 			endPoint.Host = provisionedMachine.SSHConfig.Host
 			endPoint.Port = common.DEFAULT_APISERVER_PORT
@@ -149,9 +185,13 @@ var machineCmdCreate = &cobra.Command{
 			if len(clusterProviderStatus.EtcdMembers) == 0 {
 				clusterProviderStatus.EtcdMembers = []sshproviderv1.EtcdMember{}
 			}
-			machineProviderStatus := common.DecodeSSHMachineProviderStatus(machine.Status.ProviderStatus)
+			machineProviderStatus := sshproviderv1.SSHMachineProviderStatus{}
+			err = spv1Codec.DecodeFromProviderStatus(machine.Status.ProviderStatus, &machineProviderStatus)
+			if err != nil {
+				log.Fatalf("Failed to decode machine ProviderStatus: %v", err)
+			}
 			clusterProviderStatus.EtcdMembers = append(clusterProviderStatus.EtcdMembers, *machineProviderStatus.EtcdMember)
-			status, err := common.EncodeSSHClusterProviderStatus(clusterProviderStatus)
+			status, err := spv1Codec.EncodeToProviderStatus(&clusterProviderStatus)
 			if err != nil {
 				log.Fatalf("Failed to encode clusterProvider status with error %v", err)
 			}
@@ -159,9 +199,13 @@ var machineCmdCreate = &cobra.Command{
 		}
 		if role == "node" {
 			client := getClientForMachine(&provisionedMachine, cs.SSHCredentials)
-			client.WriteFile("/etc/kubernetes/admin.conf", 0644, kubeconfig)
+			if err := client.WriteFile("/etc/kubernetes/admin.conf", 0644, kubeconfig); err != nil {
+				log.Fatalf("Failed to write admin kubeconfig to node: %v", err)
+			}
 		}
-		statefileutil.WriteStateFile(&cs)
+		if err := statefileutil.WriteStateFile(&cs); err != nil {
+			log.Fatalf("error reading state: %v", err)
+		}
 	},
 }
 
@@ -169,8 +213,82 @@ var machineCmdDelete = &cobra.Command{
 	Use:   "machine",
 	Short: "Deletes a machine from the cluster",
 	Run: func(cmd *cobra.Command, args []string) {
-		// Stub code
-		fmt.Println("Running machine delete")
+		ip := cmd.Flag("ip").Value.String()
+		cs, err := statefileutil.ReadStateFile()
+		if err != nil {
+			log.Fatal(err)
+		}
+		cluster := &cs.Cluster
+		machine := statefileutil.GetMachine(&cs, ip)
+		if machine == nil {
+			log.Fatalf("Failed to delete machine: machine does not exist")
+		}
+
+		provisionedMachine := statefileutil.GetProvisionedMachine(&cs, ip)
+		cm := &corev1.ConfigMap{
+			Data: make(map[string]string),
+		}
+		if err := provisionedMachine.ToConfigMap(cm); err != nil {
+			log.Fatalf("error reading state: %v", err)
+		}
+		clusterToken := &corev1.Secret{
+			Data: make(map[string][]byte),
+		}
+		actuator, err := sshMachineActuator.NewActuator(
+			cm,
+			cs.SSHCredentials,
+			cs.EtcdCA,
+			cs.APIServerCA,
+			cs.FrontProxyCA,
+			cs.ServiceAccountKey,
+			clusterToken,
+		)
+
+		masterPM := statefileutil.GetMaster(&cs)
+		masterCM := &corev1.ConfigMap{
+			Data: make(map[string]string),
+		}
+		if err := masterPM.ToConfigMap(masterCM); err != nil {
+			log.Fatalf("error reading state: %v", err)
+		}
+		masterClient := getClientForMachine(provisionedMachine, cs.SSHCredentials)
+
+		// nodeName includes the object kind, i.e., "node/the-name-of-the-node"
+		stdOut, stdErr, err := masterClient.RunCommand("/opt/bin/kubectl --kubeconfig=/etc/kubernetes/admin.conf get node --selector kubernetes.io/hostname=$(hostname -f) -oname")
+		if err != nil {
+			log.Fatalf("Could not identify the cluster node for machine %s: %s (%s) (%s)", ip, err, string(stdOut), string(stdErr))
+		}
+
+		nodeName := strings.TrimSpace(string(stdOut))
+		log.Printf("Draining cluster node %s for machine", nodeName)
+		// --ignore-daemonsets is used because critical components (kube-proxy, overlay network) run as daemonsets
+		// --delete-local-data is NOT used; pods using emptyDir volumes must be removed by the user, since removing them causes the data to be lost
+		// --force is NOT used; unmanaged pods must be removed by the user, since they won't be rescheduled to another node
+		stdOut, stdErr, err = masterClient.RunCommand(fmt.Sprintf("/opt/bin/kubectl --kubeconfig=/etc/kubernetes/admin.conf drain --timeout=%s --grace-period=%s --ignore-daemonsets %s", drainTimeout, drainGracePeriodSeconds, nodeName))
+		if err != nil {
+			log.Fatalf("Could not drain pods from cluster node %s: %s (%s) (%s)", ip, err, string(stdOut), string(stdErr))
+		}
+		log.Println(string(stdOut))
+
+		log.Printf("Deleting cluster node %s for machine", nodeName)
+		stdOut, stdErr, err = masterClient.RunCommand(fmt.Sprintf("/opt/bin/kubectl --kubeconfig=/etc/kubernetes/admin.conf delete %s", nodeName))
+		if err != nil {
+			log.Fatalf("Could not delete cluster node %s: %s (%s) (%s)", ip, err, string(stdOut), string(stdErr))
+		}
+		log.Println(string(stdOut))
+
+		log.Printf("Deleting machine")
+		err = actuator.Delete(cluster, machine)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		log.Print("Updating state")
+		statefileutil.DeleteMachine(&cs, ip)
+		statefileutil.DeleteProvisionedMachine(&cs, ip)
+		if err := statefileutil.WriteStateFile(&cs); err != nil {
+			log.Fatalf("error reading state: %v", err)
+		}
 	},
 }
 
@@ -233,9 +351,12 @@ func init() {
 	machineCmdCreate.Flags().String("iface", "eth0", "Interface that keepalived will bind to in case of master")
 
 	deleteCmd.AddCommand(machineCmdDelete)
-	machineCmdDelete.Flags().String("name", "", "Machine name")
+	machineCmdDelete.Flags().String("ip", "", "IP of the machine")
 	machineCmdDelete.Flags().String("force", "", "Force delete the machine")
+	machineCmdDelete.Flags().DurationVar(&drainTimeout, "drain-timeout", common.DRAIN_TIMEOUT, "The length of time to wait before giving up, zero means infinite")
+	machineCmdDelete.Flags().IntVar(&drainGracePeriodSeconds, "drain-graceperiod", common.DRAIN_GRACE_PERIOD_SECONDS, "Period of time in seconds given to each pod to terminate gracefully. If negative, the default value specified in the pod will be used.")
 
 	getCmd.AddCommand(machineCmdGet)
 	machineCmdGet.Flags().String("name", "", "Machine name")
+
 }

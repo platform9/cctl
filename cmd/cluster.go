@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"strconv"
 
+	sshproviderv1 "github.com/platform9/ssh-provider/sshproviderconfig/v1alpha1"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,6 +23,10 @@ var clusterCmdCreate = &cobra.Command{
 	Use:   "cluster",
 	Short: "Creates clusterspec in the current directory",
 	Run: func(cmd *cobra.Command, args []string) {
+		spv1Codec, err := sshproviderv1.NewCodec()
+		if err != nil {
+			log.Fatalf("Could not initialize codec for internal types: %v", err)
+		}
 		routerID, err := strconv.Atoi(cmd.Flag("routerID").Value.String())
 		vip := cmd.Flag("vip").Value.String()
 
@@ -28,8 +34,25 @@ var clusterCmdCreate = &cobra.Command{
 			log.Fatalf("Invalid routerId %v", err)
 		}
 
-		sshProviderConfig, err := common.CreateSSHClusterProviderConfig(routerID, vip)
+		sshClusterProviderConfig := sshproviderv1.SSHClusterProviderConfig{
+			TypeMeta: v1.TypeMeta{
+				APIVersion: "sshproviderconfig/v1alpha1",
+				Kind:       "SSHClusterProviderConfig",
+			},
+			VIPConfiguration: &sshproviderv1.VIPConfiguration{
+				IP:       net.ParseIP(vip),
+				RouterID: routerID,
+			},
+		}
+		providerConfig, err := spv1Codec.EncodeToProviderConfig(&sshClusterProviderConfig)
+		if err != nil {
+			log.Fatal(err)
+		}
 
+		sshClusterProviderStatus := sshproviderv1.SSHClusterProviderStatus{
+			EtcdMembers: []sshproviderv1.EtcdMember{},
+		}
+		providerStatus, err := spv1Codec.EncodeToProviderStatus(&sshClusterProviderStatus)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -57,7 +80,10 @@ var clusterCmdCreate = &cobra.Command{
 					},
 					ServiceDomain: "cluster.local",
 				},
-				ProviderConfig: *sshProviderConfig,
+				ProviderConfig: *providerConfig,
+			},
+			Status: clusterv1.ClusterStatus{
+				ProviderStatus: *providerStatus,
 			},
 		}
 		cs, err := statefileutil.ReadStateFile()
@@ -68,8 +94,10 @@ var clusterCmdCreate = &cobra.Command{
 		cs.K8sVersion = common.K8S_VERSION
 		fillCASecrets(&cs, cmd)
 		fillSASecrets(&cs, cmd)
-		statefileutil.WriteStateFile(&cs)
-		log.Printf("[pf9-clusteradm] Cluster created successfully.")
+		if err := statefileutil.WriteStateFile(&cs); err != nil {
+			log.Fatalf("error reading state: %v", err)
+		}
+		log.Println("[pf9-clusteradm] Cluster created successfully.")
 	},
 }
 

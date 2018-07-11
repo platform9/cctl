@@ -41,9 +41,6 @@ func (pm *ProvisionedMachine) ToConfigMap(cm *corev1.ConfigMap) error {
 	if err != nil {
 		return err
 	}
-	if cm.Data == nil {
-		cm.Data = make(map[string]string)
-	}
 	cm.Data[configMapKey] = string(bytes)
 	return nil
 }

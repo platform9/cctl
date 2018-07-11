@@ -26,7 +26,9 @@ var credentialsCmdCreate = &cobra.Command{
 			log.Fatal(err)
 		}
 		cs.SSHCredentials = &sshSecret
-		statefileutil.WriteStateFile(&cs)
+		if err := statefileutil.WriteStateFile(&cs); err != nil {
+			log.Fatalf("error reading state: %v", err)
+		}
 	},
 }
 

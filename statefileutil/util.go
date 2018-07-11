@@ -7,7 +7,7 @@ import (
 
 	"github.com/ghodss/yaml"
 	"github.com/platform9/pf9-clusteradm/common"
-	pm "github.com/platform9/ssh-provider/provisionedmachine"
+	"github.com/platform9/ssh-provider/provisionedmachine"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	"sigs.k8s.io/cluster-api/pkg/util"
 )
@@ -22,16 +22,6 @@ func checkFileExists() (bool, error) {
 		return true, nil
 	}
 	return false, err
-}
-
-func GetProvisionedMachine(cs *common.ClusterState, ip string) *pm.ProvisionedMachine {
-	for _, m := range cs.ProvisionedMachines {
-		if m.SSHConfig.Host == ip {
-			log.Printf("Found provisioned node for ip %s", ip)
-			return &m
-		}
-	}
-	return nil
 }
 
 func ReadStateFile() (common.ClusterState, error) {
@@ -49,10 +39,6 @@ func ReadStateFile() (common.ClusterState, error) {
 	return *cs, nil
 }
 
-func Upsert(key string, value string) {
-
-}
-
 func WriteStateFile(cs *common.ClusterState) error {
 	if cs != nil {
 		bytes, _ := yaml.Marshal(cs)
@@ -61,27 +47,53 @@ func WriteStateFile(cs *common.ClusterState) error {
 	return nil
 }
 
-func GetClusterSpec() (*clusterv1.Cluster, error) {
-	cs, err := ReadStateFile()
-	if err == nil {
-		return &cs.Cluster, nil
-	}
-	return nil, err
-}
-
-func GetMachinesSpec() ([]clusterv1.Machine, error) {
-	cs, err := ReadStateFile()
-	if err == nil {
-		return cs.Machines, nil
-	}
-	return nil, err
-}
-
-func GetMaster(cs *common.ClusterState) *pm.ProvisionedMachine {
+func GetMaster(cs *common.ClusterState) *provisionedmachine.ProvisionedMachine {
 	for _, machine := range cs.Machines {
 		if util.IsMaster(&machine) {
 			return GetProvisionedMachine(cs, machine.Name)
 		}
 	}
 	return nil
+}
+
+func GetMachine(cs *common.ClusterState, ip string) *clusterv1.Machine {
+	for _, machine := range cs.Machines {
+		if machine.Name == ip {
+			return &machine
+		}
+	}
+	return nil
+}
+
+func DeleteMachine(cs *common.ClusterState, ip string) {
+	for i, machine := range cs.Machines {
+		if machine.Name == ip {
+			// Delete element without leaking memory.
+			// See https://github.com/golang/go/wiki/SliceTricks
+			copy(cs.Machines[i:], cs.Machines[i+1:])
+			cs.Machines[len(cs.Machines)-1] = clusterv1.Machine{}
+			cs.Machines = cs.Machines[:len(cs.Machines)-1]
+		}
+	}
+}
+
+func GetProvisionedMachine(cs *common.ClusterState, ip string) *provisionedmachine.ProvisionedMachine {
+	for _, pm := range cs.ProvisionedMachines {
+		if pm.SSHConfig.Host == ip {
+			return &pm
+		}
+	}
+	return nil
+}
+
+func DeleteProvisionedMachine(cs *common.ClusterState, ip string) {
+	for i, pm := range cs.ProvisionedMachines {
+		if pm.SSHConfig.Host == ip {
+			// Delete element without leaking memory.
+			// See https://github.com/golang/go/wiki/SliceTricks
+			copy(cs.ProvisionedMachines[i:], cs.ProvisionedMachines[i+1:])
+			cs.ProvisionedMachines[len(cs.ProvisionedMachines)-1] = provisionedmachine.ProvisionedMachine{}
+			cs.ProvisionedMachines = cs.ProvisionedMachines[:len(cs.ProvisionedMachines)-1]
+		}
+	}
 }
