@@ -1,4 +1,4 @@
-# pf9-clusteradm
+# pf9-clusteradm (cctl)
 
 Command line tool to manage onpremise K8s clusters
 
@@ -7,4 +7,4 @@ Command line tool to manage onpremise K8s clusters
 make
 ```
 ## Usage
-./pf9-clusteradm --help
+./cctl --help
