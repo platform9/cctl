@@ -42,6 +42,7 @@ var machineCmdCreate = &cobra.Command{
 
 		timestamp := v1.Now()
 		ip := cmd.Flag("ip").Value.String()
+		iface := cmd.Flag("iface").Value.String()
 
 		cs, err := statefileutil.ReadStateFile()
 		if err != nil {
@@ -99,6 +100,7 @@ var machineCmdCreate = &cobra.Command{
 				Port:       port,
 				PublicKeys: publicKeys,
 			},
+			VIPNetworkInterface: iface,
 		}
 
 		cm := corev1.ConfigMap{}
@@ -228,6 +230,7 @@ func init() {
 	machineCmdCreate.Flags().String("role", "node", "Role of the machine. Can be master/node")
 	machineCmdCreate.Flags().String("publicKeys", "", "Comma separated list of public host keys for the machine")
 	machineCmdCreate.Flags().String("sshSecretName", "sshSecret", "Name of the sshSecret to use")
+	machineCmdCreate.Flags().String("iface", "eth0", "Interface that keepalived will bind to in case of master")
 
 	deleteCmd.AddCommand(machineCmdDelete)
 	machineCmdDelete.Flags().String("name", "", "Machine name")
