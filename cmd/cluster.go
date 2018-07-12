@@ -69,6 +69,7 @@ var clusterCmdCreate = &cobra.Command{
 		fillCASecrets(&cs, cmd)
 		fillSASecrets(&cs, cmd)
 		statefileutil.WriteStateFile(&cs)
+		log.Printf("[pf9-clusteradm] Cluster created successfully.")
 	},
 }
 
@@ -111,7 +112,6 @@ func fillSASecrets(cs *common.ClusterState, cmd *cobra.Command) {
 func fillCASecrets(cs *common.ClusterState, cmd *cobra.Command) {
 	caKeyFile := cmd.Flag("cakey").Value.String()
 	caCertFile := cmd.Flag("cacert").Value.String()
-	log.Printf("Value = %s", cmd.Flag("cacert").Value.String())
 	if len(caKeyFile) == 0 && len(caCertFile) == 0 {
 		cert, key, err := common.NewCertificateAuthority()
 		if err != nil {
