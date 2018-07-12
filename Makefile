@@ -15,8 +15,9 @@ PF9_VERSION ?= 5.5.0
 VERSION := $(PF9_VERSION)-$(BUILD_NUMBER)
 DETECTED_OS := $(shell uname -s)
 DEP_BIN_GIT := https://github.com/golang/dep/releases/download/v0.4.1/dep-$(DETECTED_OS)-amd64
-BIN := pf9-clusteradm
-PACKAGE_GOPATH := /go/src/github.com/platform9/$(BIN)
+BIN := cctl
+REPO := pf9-clusteradm
+PACKAGE_GOPATH := /go/src/github.com/platform9/$(REPO)
 DEP_TEST=$(shell which dep)
 
 ifeq ($(DEP_TEST),)
@@ -45,7 +46,7 @@ ensure: $(DEP_BIN)
 	$(DEP_BIN) ensure -v
 
 $(BIN):
-	go build
+	go build -o $(BIN)
 
 format:
 	gofmt -w -s *.go
