@@ -3,6 +3,7 @@ package machine
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 
@@ -67,22 +68,32 @@ func (c *client) RunCommand(cmd string) ([]byte, []byte, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to create session: %s", err)
 	}
-	var stdOutBuf bytes.Buffer
-	var stdErrBuf bytes.Buffer
-	session.Stdout = &stdOutBuf
-	session.Stderr = &stdErrBuf
-	err = session.Run(cmd)
+	stdOutPipe, err := session.StdoutPipe()
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to pipe stdout: %s", err)
+	}
+	stdErrPipe, err := session.StderrPipe()
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to pipe stderr: %s", err)
+	}
+	err = session.Start(cmd)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to run command: %s", err)
+	}
+	stdOut, err := ioutil.ReadAll(stdOutPipe)
+	stdErr, err := ioutil.ReadAll(stdErrPipe)
+	err = session.Wait()
 	if err != nil {
 		switch err.(type) {
 		case *ssh.ExitError:
-			return nil, nil, fmt.Errorf("command failed: %s", err)
+			return stdOut, stdErr, fmt.Errorf("command failed: %s", err)
 		case *ssh.ExitMissingError:
-			return nil, nil, fmt.Errorf("command failed: %s", err)
+			return stdOut, stdErr, fmt.Errorf("command failed (no exit status): %s", err)
 		default:
-			return nil, nil, fmt.Errorf("command failed: %s", err)
+			return stdOut, stdErr, fmt.Errorf("command failed: %s", err)
 		}
 	}
-	return stdOutBuf.Bytes(), stdErrBuf.Bytes(), nil
+	return stdOut, stdErr, nil
 }
 
 // WriteFile writes a file to the machine

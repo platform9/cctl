@@ -1,11 +1,12 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"strconv"
 	"time"
 
-	"io/ioutil"
 	"log"
 	"strings"
 
@@ -62,17 +63,25 @@ var machineCmdCreate = &cobra.Command{
 		if err != nil {
 			log.Fatalf("Invalid port %v", err)
 		}
-		publicKeyFiles := cmd.Flag("publicKeys").Value
+		publicKeyPaths := cmd.Flag("publicKeys").Value
 		publicKeys := []string{}
-		if publicKeyFiles != nil && len(publicKeyFiles.String()) > 0 {
-			files := strings.Split(publicKeyFiles.String(), ",")
-			publicKeys := []string{}
-			for _, file := range files {
-				bytes, err := ioutil.ReadFile(file)
+		if publicKeyPaths != nil && len(publicKeyPaths.String()) > 0 {
+			paths := strings.Split(publicKeyPaths.String(), ",")
+			for _, path := range paths {
+				file, err := os.Open(path)
 				if err != nil {
-					log.Fatalf("Failed to read file %s with error %v", file, err)
+					log.Fatalf("Failed to open public key file %q: %v", path, err)
 				}
-				publicKeys = append(publicKeys, string(bytes))
+				defer file.Close()
+				lineReader := bufio.NewReader(file)
+				publicKeyBytes, isPrefix, err := lineReader.ReadLine()
+				if err != nil {
+					log.Fatalf("Failed to read public key from file %q: %v", path, err)
+				}
+				if isPrefix {
+					log.Fatalf("Failed to read public key from file %q: first line exceeds buffer size", path)
+				}
+				publicKeys = append(publicKeys, string(publicKeyBytes))
 			}
 		}
 
@@ -135,7 +144,7 @@ var machineCmdCreate = &cobra.Command{
 			Data: make(map[string]string),
 		}
 		if err := provisionedMachine.ToConfigMap(cm); err != nil {
-			log.Fatalf("error reading state: %v", err)
+			log.Fatalf("Error reading state: %v", err)
 		}
 		cs.ProvisionedMachines = append(cs.ProvisionedMachines, provisionedMachine)
 
@@ -159,12 +168,12 @@ var machineCmdCreate = &cobra.Command{
 			cs.ServiceAccountKey,
 			clusterToken,
 		)
-
 		if len(publicKeys) == 0 {
 			actuator.InsecureIgnoreHostKey = true
+			log.Printf("Not able to verify machine SSH identity: No public keys given. Continuing...")
 		}
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("Unable to create machine actuator: %s", err)
 		}
 
 		cluster := &cs.Cluster
@@ -204,7 +213,7 @@ var machineCmdCreate = &cobra.Command{
 			}
 		}
 		if err := statefileutil.WriteStateFile(&cs); err != nil {
-			log.Fatalf("error reading state: %v", err)
+			log.Fatalf("Error writing state: %v", err)
 		}
 	},
 }
@@ -229,7 +238,7 @@ var machineCmdDelete = &cobra.Command{
 			Data: make(map[string]string),
 		}
 		if err := provisionedMachine.ToConfigMap(cm); err != nil {
-			log.Fatalf("error reading state: %v", err)
+			log.Fatalf("Error reading state: %v", err)
 		}
 		clusterToken := &corev1.Secret{
 			Data: make(map[string][]byte),
@@ -243,39 +252,51 @@ var machineCmdDelete = &cobra.Command{
 			cs.ServiceAccountKey,
 			clusterToken,
 		)
+		if len(provisionedMachine.SSHConfig.PublicKeys) == 0 {
+			actuator.InsecureIgnoreHostKey = true
+			log.Printf("Not able to verify machine SSH identity: No public keys given. Continuing...")
+		}
+		if err != nil {
+			log.Fatalf("Unable to create machine actuator: %s", err)
+		}
 
 		masterPM := statefileutil.GetMaster(&cs)
 		masterCM := &corev1.ConfigMap{
 			Data: make(map[string]string),
 		}
 		if err := masterPM.ToConfigMap(masterCM); err != nil {
-			log.Fatalf("error reading state: %v", err)
+			log.Fatalf("Error reading state: %v", err)
 		}
 		masterClient := getClientForMachine(provisionedMachine, cs.SSHCredentials)
 
-		// nodeName includes the object kind, i.e., "node/the-name-of-the-node"
+		// TODO(dlipovetsky) Handle /opt/bin/kubectl not found. Possibly infer
+		// that the nodeadm reset ran at least as far as removing the kubectl
+		// binary. nodeName includes the object kind, i.e.,
+
+		// "node/the-name-of-the-node"
 		stdOut, stdErr, err := masterClient.RunCommand("/opt/bin/kubectl --kubeconfig=/etc/kubernetes/admin.conf get node --selector kubernetes.io/hostname=$(hostname -f) -oname")
 		if err != nil {
 			log.Fatalf("Could not identify the cluster node for machine %s: %s (%s) (%s)", ip, err, string(stdOut), string(stdErr))
 		}
-
 		nodeName := strings.TrimSpace(string(stdOut))
-		log.Printf("Draining cluster node %s for machine", nodeName)
-		// --ignore-daemonsets is used because critical components (kube-proxy, overlay network) run as daemonsets
-		// --delete-local-data is NOT used; pods using emptyDir volumes must be removed by the user, since removing them causes the data to be lost
-		// --force is NOT used; unmanaged pods must be removed by the user, since they won't be rescheduled to another node
-		stdOut, stdErr, err = masterClient.RunCommand(fmt.Sprintf("/opt/bin/kubectl --kubeconfig=/etc/kubernetes/admin.conf drain --timeout=%s --grace-period=%s --ignore-daemonsets %s", drainTimeout, drainGracePeriodSeconds, nodeName))
-		if err != nil {
-			log.Fatalf("Could not drain pods from cluster node %s: %s (%s) (%s)", ip, err, string(stdOut), string(stdErr))
-		}
-		log.Println(string(stdOut))
+		if len(nodeName) != 0 {
+			log.Printf("Draining cluster node %s for machine", nodeName)
+			// --ignore-daemonsets is used because critical components (kube-proxy, overlay network) run as daemonsets
+			// --delete-local-data is NOT used; pods using emptyDir volumes must be removed by the user, since removing them causes the data to be lost
+			// --force is NOT used; unmanaged pods must be removed by the user, since they won't be rescheduled to another node
+			stdOut, stdErr, err = masterClient.RunCommand(fmt.Sprintf("/opt/bin/kubectl --kubeconfig=/etc/kubernetes/admin.conf drain --timeout=%v --grace-period=%v --ignore-daemonsets %v", drainTimeout, drainGracePeriodSeconds, nodeName))
+			if err != nil {
+				log.Fatalf("Could not drain pods from cluster node %s: %s (%s) (%s)", ip, err, string(stdOut), string(stdErr))
+			}
+			log.Println(string(stdOut))
 
-		log.Printf("Deleting cluster node %s for machine", nodeName)
-		stdOut, stdErr, err = masterClient.RunCommand(fmt.Sprintf("/opt/bin/kubectl --kubeconfig=/etc/kubernetes/admin.conf delete %s", nodeName))
-		if err != nil {
-			log.Fatalf("Could not delete cluster node %s: %s (%s) (%s)", ip, err, string(stdOut), string(stdErr))
+			log.Printf("Deleting cluster node %s for machine", nodeName)
+			stdOut, stdErr, err = masterClient.RunCommand(fmt.Sprintf("/opt/bin/kubectl --kubeconfig=/etc/kubernetes/admin.conf delete %v", nodeName))
+			if err != nil {
+				log.Fatalf("Could not delete cluster node %s: %s (%s) (%s)", ip, err, string(stdOut), string(stdErr))
+			}
+			log.Println(string(stdOut))
 		}
-		log.Println(string(stdOut))
 
 		log.Printf("Deleting machine")
 		err = actuator.Delete(cluster, machine)
@@ -287,7 +308,7 @@ var machineCmdDelete = &cobra.Command{
 		statefileutil.DeleteMachine(&cs, ip)
 		statefileutil.DeleteProvisionedMachine(&cs, ip)
 		if err := statefileutil.WriteStateFile(&cs); err != nil {
-			log.Fatalf("error reading state: %v", err)
+			log.Fatalf("Error writing state: %v", err)
 		}
 	},
 }

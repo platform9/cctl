@@ -113,47 +113,44 @@ func (sa *SSHActuator) createMaster(pm *provisionedmachine.ProvisionedMachine, c
 	}
 	sa.writeCAs(sftp)
 
-	var session *ssh.Session
-	var out []byte
-	session, err = client.NewSession()
-	defer session.Close()
+	session, err := client.NewSession()
 	if err != nil {
 		return fmt.Errorf("error creating new SSH session for machine %q: %s", machine.Name, err)
 	}
-	out, err = session.CombinedOutput("echo writing ca cert and key")
-	if err != nil {
-		return fmt.Errorf("error invoking ssh command %s", err)
-	}
-	log.Println(string(out))
-
-	session, err = client.NewSession()
 	defer session.Close()
-	if err != nil {
-		return fmt.Errorf("error creating new SSH session for machine %q: %s", machine.Name, err)
-	}
 	clusterProviderStatus := sshconfigv1.SSHClusterProviderStatus{}
 	if cluster.Status.ProviderStatus.Value != nil {
 		err = sa.sshProviderCodec.DecodeFromProviderStatus(cluster.Status.ProviderStatus, &clusterProviderStatus)
 	}
 	if err != nil {
-		return fmt.Errorf("error decoding cluster provider status %v\n", err)
+		return fmt.Errorf("error decoding cluster provider status %v", err)
 	}
+
+	var cmd string
+	var out []byte
 	if len(clusterProviderStatus.EtcdMembers) > 0 {
 		member := chooseEtcdEndpoint(clusterProviderStatus.EtcdMembers)
-		out, err = session.CombinedOutput(fmt.Sprintf("/opt/bin/etcdadm join %s", member))
+		cmd = fmt.Sprintf("/opt/bin/etcdadm join %s", member)
 	} else {
-		out, err = session.CombinedOutput("/opt/bin/etcdadm init")
+		cmd = "/opt/bin/etcdadm init"
 	}
+	session, err = client.NewSession()
+	if err != nil {
+		return fmt.Errorf("error creating new SSH session for machine %q: %s", machine.Name, err)
+	}
+	defer session.Close()
+	log.Printf("Running %q on machine %s. This may take a few minutes.", cmd, machine.Name)
+	out, err = session.CombinedOutput(cmd)
 	if err != nil {
 		return fmt.Errorf("error invoking ssh command %s", err)
 	}
 	log.Println(string(out))
 
 	session, err = client.NewSession()
-	defer session.Close()
 	if err != nil {
 		return fmt.Errorf("error creating new SSH session for machine %q: %s", machine.Name, err)
 	}
+	defer session.Close()
 	out, err = session.CombinedOutput("/opt/bin/etcdadm info")
 	if err != nil {
 		return fmt.Errorf("error invoking ssh command %s", err)
@@ -176,11 +173,13 @@ func (sa *SSHActuator) createMaster(pm *provisionedmachine.ProvisionedMachine, c
 	machine.Status.ProviderStatus = *ps
 
 	session, err = client.NewSession()
-	defer session.Close()
 	if err != nil {
 		return fmt.Errorf("error creating new SSH session for machine %q: %s", machine.Name, err)
 	}
-	out, err = session.CombinedOutput("/opt/bin/nodeadm init --cfg /tmp/nodeadm.yaml")
+	defer session.Close()
+	cmd = "/opt/bin/nodeadm init --cfg /tmp/nodeadm.yaml"
+	log.Printf("Running %q on machine %s. This may take a few minutes.", cmd, machine.Name)
+	out, err = session.CombinedOutput(cmd)
 	if err != nil {
 		return fmt.Errorf("error invoking ssh command %s", err)
 	}
@@ -252,11 +251,12 @@ func (sa *SSHActuator) createNode(cluster *clusterv1.Cluster, machine *clusterv1
 	if err != nil {
 		return fmt.Errorf("error creating new SSH session for machine %q: %s", machine.Name, err)
 	}
+	defer session.Close()
 	cmd := fmt.Sprintf("/opt/bin/nodeadm join --master %s --token %s --cahash %s",
 		getAPIEndPoint(cluster),
 		string(sa.clusterToken.Data["token"]),
 		string(sa.clusterToken.Data["cahash"]))
-	log.Printf("Nodeadm join command = %s", cmd)
+	log.Printf("Running %q on machine %s. This may take a few minutes.", cmd, machine.Name)
 	out, err := session.CombinedOutput(cmd)
 	if err != nil {
 		return fmt.Errorf("error invoking ssh command %s", err)
@@ -275,24 +275,31 @@ func (sa *SSHActuator) Delete(cluster *clusterv1.Cluster, machine *clusterv1.Mac
 		return fmt.Errorf("error deleting machine %q: failed to create SSH client: %s", machine.Name, err)
 	}
 	defer client.Close()
-	var session *ssh.Session
-	var out []byte
-	session, err = client.NewSession()
-	defer session.Close()
+
+	session, err := client.NewSession()
 	if err != nil {
 		return fmt.Errorf("error creating new SSH session for machine %q: %s", machine.Name, err)
 	}
+	defer session.Close()
 	cmd := "/opt/bin/nodeadm reset"
-	out, err = session.CombinedOutput(cmd)
+	log.Printf("Running %q on machine %s. This may take a few minutes.", cmd, machine.Name)
+	out, err := session.CombinedOutput(cmd)
 	if err != nil {
-		return fmt.Errorf("error invoking %q: %v", cmd, err)
+		return fmt.Errorf("error invoking ssh command %q: %v", cmd, err)
 	}
 	log.Println(string(out))
+
 	if clusterutil.IsMaster(machine) {
+		session, err := client.NewSession()
+		if err != nil {
+			return fmt.Errorf("error creating new SSH session for machine %q: %s", machine.Name, err)
+		}
+		defer session.Close()
 		cmd := "/opt/bin/etcdadm reset"
+		log.Printf("Running %q on machine %s. This may take a few minutes.", cmd, machine.Name)
 		out, err := session.CombinedOutput(cmd)
 		if err != nil {
-			return fmt.Errorf("error invoking %q: %v", cmd, err)
+			return fmt.Errorf("error invoking ssh command %q: %v", cmd, err)
 		}
 		log.Println(string(out))
 	}
