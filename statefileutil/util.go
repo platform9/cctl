@@ -73,6 +73,7 @@ func DeleteMachine(cs *common.ClusterState, ip string) {
 			copy(cs.Machines[i:], cs.Machines[i+1:])
 			cs.Machines[len(cs.Machines)-1] = clusterv1.Machine{}
 			cs.Machines = cs.Machines[:len(cs.Machines)-1]
+			return
 		}
 	}
 }
@@ -94,6 +95,7 @@ func DeleteProvisionedMachine(cs *common.ClusterState, ip string) {
 			copy(cs.ProvisionedMachines[i:], cs.ProvisionedMachines[i+1:])
 			cs.ProvisionedMachines[len(cs.ProvisionedMachines)-1] = provisionedmachine.ProvisionedMachine{}
 			cs.ProvisionedMachines = cs.ProvisionedMachines[:len(cs.ProvisionedMachines)-1]
+			return
 		}
 	}
 }
