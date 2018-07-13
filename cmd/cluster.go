@@ -46,6 +46,7 @@ var clusterCmdCreate = &cobra.Command{
 				RouterID: routerID,
 			},
 		}
+
 		providerConfig, err := spv1Codec.EncodeToProviderConfig(&sshClusterProviderConfig)
 		if err != nil {
 			log.Fatal(err)
@@ -93,6 +94,7 @@ var clusterCmdCreate = &cobra.Command{
 			log.Fatal(err)
 		}
 		cs.Cluster = cluster
+		cs.VIPConfiguration = sshClusterProviderConfig.VIPConfiguration
 		cs.K8sVersion = common.K8S_VERSION
 		fillCASecrets(&cs, cmd)
 		fillSASecrets(&cs, cmd)
@@ -191,7 +193,7 @@ var clusterCmdDelete = &cobra.Command{
 			cs.FrontProxyCA = nil
 			cs.K8sVersion = ""
 			cs.ServiceAccountKey = nil
-			cs.VIPConfiguration = common.VIPConfigurationType{}
+			cs.VIPConfiguration = nil
 			if err := statefileutil.WriteStateFile(&cs); err != nil {
 				log.Fatalf("Unable to write cluster state file: %s", err)
 			}
@@ -212,7 +214,7 @@ var clusterCmdDelete = &cobra.Command{
 		cs.FrontProxyCA = nil
 		cs.K8sVersion = ""
 		cs.ServiceAccountKey = nil
-		cs.VIPConfiguration = common.VIPConfigurationType{}
+		cs.VIPConfiguration = nil
 		if err := statefileutil.WriteStateFile(&cs); err != nil {
 			log.Fatalf("Unable to write cluster state file: %s", err)
 		}
