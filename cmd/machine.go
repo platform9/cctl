@@ -28,13 +28,44 @@ var (
 	drainGracePeriodSeconds int
 )
 
-func machineAlreadyExists(ip string, cs common.ClusterState) bool {
+func machineAlreadyExists(ip string, cs *common.ClusterState) bool {
 	for _, machine := range cs.Machines {
 		if machine.Name == ip {
 			return true
 		}
 	}
 	return false
+}
+
+func clusterCreated(cs *common.ClusterState) bool {
+	if cs.Cluster.ObjectMeta.GetName() == "" {
+		return false
+	}
+	return true
+}
+
+func masterExists(cs *common.ClusterState) bool {
+	if statefileutil.GetMaster(cs) == nil {
+		return false
+	}
+	return true
+}
+
+func validateRequirementsForCreate(cs *common.ClusterState, ip, role string) {
+	if !clusterCreated(cs) {
+		log.Fatalln("Cannot create machine without creating a cluster. Run create cluster first")
+	}
+	if cs.SSHCredentials == nil {
+		log.Fatalln("Cannot create machine without ssh credentials. Run create credentials first")
+	}
+	if machineAlreadyExists(ip, cs) {
+		log.Fatalln("Failed to create machine, machine already exists")
+	}
+	if role == "node" {
+		if !masterExists(cs) {
+			log.Fatalln("Cannot create machine as node until master is created")
+		}
+	}
 }
 
 // machineCmdCreate represents the machine create command
@@ -50,19 +81,18 @@ var machineCmdCreate = &cobra.Command{
 		timestamp := v1.Now()
 		ip := cmd.Flag("ip").Value.String()
 		iface := cmd.Flag("iface").Value.String()
+		role := cmd.Flag("role").Value.String()
+		port, err := strconv.Atoi(cmd.Flag("port").Value.String())
+		if err != nil {
+			log.Fatalf("Invalid port %v", err)
+		}
 
 		cs, err := statefileutil.ReadStateFile()
 		if err != nil {
 			log.Fatal(err)
 		}
-		if machineAlreadyExists(ip, cs) {
-			log.Fatalf("Failed to add machine, machine already exists")
-		}
+		validateRequirementsForCreate(&cs, ip, role)
 
-		port, err := strconv.Atoi(cmd.Flag("port").Value.String())
-		if err != nil {
-			log.Fatalf("Invalid port %v", err)
-		}
 		publicKeyPaths := cmd.Flag("publicKeys").Value
 		publicKeys := []string{}
 		if publicKeyPaths != nil && len(publicKeyPaths.String()) > 0 {
@@ -124,7 +154,6 @@ var machineCmdCreate = &cobra.Command{
 				ProviderStatus: *providerStatus,
 			},
 		}
-		role := cmd.Flag("role").Value.String()
 		if role == "master" {
 			machine.Spec.Roles = []clustercommon.MachineRole{clustercommon.MasterRole}
 		} else if role == "node" {
