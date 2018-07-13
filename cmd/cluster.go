@@ -235,28 +235,29 @@ var clusterCmdGet = &cobra.Command{
 		if err != nil {
 			log.Fatalf("Unable to read cluster spec file: %s", err)
 		}
-		if outputFmt == "yaml" {
+		switch outputFmt {
+		case "yaml":
 			// Flag yaml specificed. Print cluster spec as yaml
 			bytes, err := yaml.Marshal(cs.Cluster)
 			if err != nil {
 				log.Fatalf("Unable to marshal cluster spec file to yaml: %s", err)
 			}
 			os.Stdout.Write(bytes)
-			return
-		}
-		if outputFmt == "json" {
+		case "json":
 			// Flag json specified. Print cluster spec as json
 			bytes, err := json.Marshal(cs.Cluster)
 			if err != nil {
 				log.Fatalf("Unable to marshal cluster spec file to json: %s", err)
 			}
 			os.Stdout.Write(bytes)
-			return
-		}
-		// Pretty print cluster details
-		t := template.Must(template.New("ClusterV1PrintTemplate").Parse(common.ClusterV1PrintTemplate))
-		if err := t.Execute(os.Stdout, cs); err != nil {
-			log.Fatalf("Could not pretty print cluster details: %s", err)
+		case "":
+			// Pretty print cluster details
+			t := template.Must(template.New("ClusterV1PrintTemplate").Parse(common.ClusterV1PrintTemplate))
+			if err := t.Execute(os.Stdout, cs); err != nil {
+				log.Fatalf("Could not pretty print cluster details: %s", err)
+			}
+		default:
+			log.Fatalf("Unsupported output format %q", outputFmt)
 		}
 	},
 }
@@ -306,7 +307,7 @@ func init() {
 	deleteCmd.Flags().BoolVar(&forceDelete, "force", false, "Force delete a cluster")
 
 	getCmd.AddCommand(clusterCmdGet)
-	clusterCmdGet.Flags().StringVar(&outputFmt, "o", "", "output format json|yaml|wide")
+	clusterCmdGet.Flags().StringVar(&outputFmt, "o", "", "output format json|yaml")
 
 	upgradeCmd.AddCommand(clusterCmdUpgrade)
 	recoverCmd.AddCommand(clusterCmdRecover)
