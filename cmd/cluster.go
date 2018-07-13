@@ -23,7 +23,6 @@ import (
 )
 
 var forceDelete bool
-var outputFmt string
 
 // clusterCmd represents the cluster command
 var clusterCmdCreate = &cobra.Command{
@@ -307,8 +306,6 @@ func init() {
 	deleteCmd.Flags().BoolVar(&forceDelete, "force", false, "Force delete a cluster")
 
 	getCmd.AddCommand(clusterCmdGet)
-	clusterCmdGet.Flags().StringVar(&outputFmt, "o", "", "output format json|yaml")
-
 	upgradeCmd.AddCommand(clusterCmdUpgrade)
 	recoverCmd.AddCommand(clusterCmdRecover)
 	backupCmd.AddCommand(clusterCmdBackup)

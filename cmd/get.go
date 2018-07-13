@@ -1,10 +1,12 @@
 package cmd
 
 import (
-	"fmt"
+	"log"
 
 	"github.com/spf13/cobra"
 )
+
+var outputFmt string
 
 // getCmd represents the get command
 var getCmd = &cobra.Command{
@@ -12,10 +14,11 @@ var getCmd = &cobra.Command{
 	Short: "Used to get resources",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Get called")
+		log.Printf("Unknown object %q to get. Use --help to print available options", args[0])
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(getCmd)
+	getCmd.PersistentFlags().StringVar(&outputFmt, "o", "", "Output format yaml|json")
 }
