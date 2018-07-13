@@ -2,7 +2,6 @@ package statefileutil
 
 import (
 	"io/ioutil"
-	"log"
 	"os"
 
 	"github.com/ghodss/yaml"
@@ -30,7 +29,6 @@ func ReadStateFile() (common.ClusterState, error) {
 	if ret == false {
 		return *cs, nil
 	}
-	log.Printf("Using state file found at: %s", STATE_FILE_PATH)
 	d, err := ioutil.ReadFile(STATE_FILE_PATH)
 	if err != nil {
 		return *cs, err

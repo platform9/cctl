@@ -310,7 +310,7 @@ var machineCmdDelete = &cobra.Command{
 		if err := statefileutil.WriteStateFile(&cs); err != nil {
 			log.Fatalf("Error writing state: %v", err)
 		}
-		log.Printf("Successfully deleted node %s", ip)
+		log.Printf("Successfully deleted machine %s", ip)
 	},
 }
 

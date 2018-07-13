@@ -178,16 +178,24 @@ var clusterCmdDelete = &cobra.Command{
 	Short: "Deletes a node to the cluster",
 	Run: func(cmd *cobra.Command, args []string) {
 		log.Println("Running cluster delete")
-		if forceDelete {
-			log.Println("Note: Forceful delete of cluster! Deleting cluster metadata")
-			if err := statefileutil.DeleteStateFile(); err != nil {
-				log.Fatalf("Unable to remove cluster state file: %s", err)
-			}
-			return
-		}
 		cs, err := statefileutil.ReadStateFile()
 		if err != nil {
 			log.Fatalf("Failed to read cluster state file. Cannot delete cluster: %s", err)
+		}
+		if forceDelete {
+			log.Println("Note: Forceful delete of cluster! Deleting cluster metadata")
+			// Unset all objects created by the create cluster call
+			cs.Cluster = clusterv1.Cluster{}
+			cs.APIServerCA = nil
+			cs.EtcdCA = nil
+			cs.FrontProxyCA = nil
+			cs.K8sVersion = ""
+			cs.ServiceAccountKey = nil
+			cs.VIPConfiguration = common.VIPConfigurationType{}
+			if err := statefileutil.WriteStateFile(&cs); err != nil {
+				log.Fatalf("Unable to write cluster state file: %s", err)
+			}
+			return
 		}
 		if len(cs.Machines) > 0 {
 			// There is alteast one machine present in the cluster. Don't continue delete
@@ -197,8 +205,16 @@ var clusterCmdDelete = &cobra.Command{
 			}
 			log.Fatalf("Machines [%s] part of cluster. Please delete them before calling cluster delete.", machineNames)
 		}
-		if err := statefileutil.DeleteStateFile(); err != nil {
-			log.Fatalf("Unable to remove cluster state file: %s", err)
+		// Unset all objects created by the create cluster call
+		cs.Cluster = clusterv1.Cluster{}
+		cs.APIServerCA = nil
+		cs.EtcdCA = nil
+		cs.FrontProxyCA = nil
+		cs.K8sVersion = ""
+		cs.ServiceAccountKey = nil
+		cs.VIPConfiguration = common.VIPConfigurationType{}
+		if err := statefileutil.WriteStateFile(&cs); err != nil {
+			log.Fatalf("Unable to write cluster state file: %s", err)
 		}
 		log.Println("Cluster deleted successfully")
 	},
