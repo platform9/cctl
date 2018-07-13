@@ -1,12 +1,16 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
+	"os"
 	"strconv"
+	"text/template"
 
+	"github.com/ghodss/yaml"
 	sshproviderv1 "github.com/platform9/ssh-provider/sshproviderconfig/v1alpha1"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
@@ -19,6 +23,7 @@ import (
 )
 
 var forceDelete bool
+var outputFmt string
 
 // clusterCmd represents the cluster command
 var clusterCmdCreate = &cobra.Command{
@@ -46,6 +51,7 @@ var clusterCmdCreate = &cobra.Command{
 				RouterID: routerID,
 			},
 		}
+
 		providerConfig, err := spv1Codec.EncodeToProviderConfig(&sshClusterProviderConfig)
 		if err != nil {
 			log.Fatal(err)
@@ -93,6 +99,7 @@ var clusterCmdCreate = &cobra.Command{
 			log.Fatal(err)
 		}
 		cs.Cluster = cluster
+		cs.VIPConfiguration = sshClusterProviderConfig.VIPConfiguration
 		cs.K8sVersion = common.K8S_VERSION
 		fillCASecrets(&cs, cmd)
 		fillSASecrets(&cs, cmd)
@@ -191,7 +198,7 @@ var clusterCmdDelete = &cobra.Command{
 			cs.FrontProxyCA = nil
 			cs.K8sVersion = ""
 			cs.ServiceAccountKey = nil
-			cs.VIPConfiguration = common.VIPConfigurationType{}
+			cs.VIPConfiguration = nil
 			if err := statefileutil.WriteStateFile(&cs); err != nil {
 				log.Fatalf("Unable to write cluster state file: %s", err)
 			}
@@ -212,7 +219,7 @@ var clusterCmdDelete = &cobra.Command{
 		cs.FrontProxyCA = nil
 		cs.K8sVersion = ""
 		cs.ServiceAccountKey = nil
-		cs.VIPConfiguration = common.VIPConfigurationType{}
+		cs.VIPConfiguration = nil
 		if err := statefileutil.WriteStateFile(&cs); err != nil {
 			log.Fatalf("Unable to write cluster state file: %s", err)
 		}
@@ -224,8 +231,34 @@ var clusterCmdGet = &cobra.Command{
 	Use:   "cluster",
 	Short: "Get the cluster details",
 	Run: func(cmd *cobra.Command, args []string) {
-		// Stub code
-		fmt.Println("Running get cluster")
+		cs, err := statefileutil.ReadStateFile()
+		if err != nil {
+			log.Fatalf("Unable to read cluster spec file: %s", err)
+		}
+		switch outputFmt {
+		case "yaml":
+			// Flag yaml specificed. Print cluster spec as yaml
+			bytes, err := yaml.Marshal(cs.Cluster)
+			if err != nil {
+				log.Fatalf("Unable to marshal cluster spec file to yaml: %s", err)
+			}
+			os.Stdout.Write(bytes)
+		case "json":
+			// Flag json specified. Print cluster spec as json
+			bytes, err := json.Marshal(cs.Cluster)
+			if err != nil {
+				log.Fatalf("Unable to marshal cluster spec file to json: %s", err)
+			}
+			os.Stdout.Write(bytes)
+		case "":
+			// Pretty print cluster details
+			t := template.Must(template.New("ClusterV1PrintTemplate").Parse(common.ClusterV1PrintTemplate))
+			if err := t.Execute(os.Stdout, cs); err != nil {
+				log.Fatalf("Could not pretty print cluster details: %s", err)
+			}
+		default:
+			log.Fatalf("Unsupported output format %q", outputFmt)
+		}
 	},
 }
 
@@ -274,6 +307,8 @@ func init() {
 	deleteCmd.Flags().BoolVar(&forceDelete, "force", false, "Force delete a cluster")
 
 	getCmd.AddCommand(clusterCmdGet)
+	clusterCmdGet.Flags().StringVar(&outputFmt, "o", "", "output format json|yaml")
+
 	upgradeCmd.AddCommand(clusterCmdUpgrade)
 	recoverCmd.AddCommand(clusterCmdRecover)
 	backupCmd.AddCommand(clusterCmdBackup)
