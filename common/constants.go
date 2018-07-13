@@ -21,4 +21,10 @@ Networking
 	VIP          : {{ .VIPConfiguration.IP  }}
 	RouterID     : {{ .VIPConfiguration.RouterID }}
 `
+	MachineV1PrintTemplate = `Machine Information
+------- -----------
+Machine IP             Creation Timestamp                       Role
+{{ range $machine := .}}{{ $machine.ObjectMeta.Name }}           {{ $machine.ObjectMeta.CreationTimestamp }}           {{ $machine.Spec.Roles }}
+{{ end }}
+`
 )

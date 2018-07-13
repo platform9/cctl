@@ -2,14 +2,17 @@ package cmd
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
+	"text/template"
 	"time"
 
 	"log"
 	"strings"
 
+	"github.com/ghodss/yaml"
 	"github.com/platform9/pf9-clusteradm/common"
 	"github.com/platform9/pf9-clusteradm/machine"
 	"github.com/platform9/pf9-clusteradm/statefileutil"
@@ -347,9 +350,34 @@ var machineCmdGet = &cobra.Command{
 	Use:   "machine",
 	Short: "Get a machine",
 	Run: func(cmd *cobra.Command, args []string) {
-		// Stub code
-		fmt.Println("Running get machine")
-		// TODO: Implement machine/machines
+		cs, err := statefileutil.ReadStateFile()
+		if err != nil {
+			log.Fatalf("Unable to read state file: %s", err)
+		}
+		switch outputFmt {
+		case "yaml":
+			// Flag yaml specificed. Print cluster spec as yaml
+			bytes, err := yaml.Marshal(cs.Machines)
+			if err != nil {
+				log.Fatalf("Unable to marshal cluster spec file to yaml: %s", err)
+			}
+			os.Stdout.Write(bytes)
+		case "json":
+			// Flag json specified. Print cluster spec as json
+			bytes, err := json.Marshal(cs.Machines)
+			if err != nil {
+				log.Fatalf("Unable to marshal cluster spec file to json: %s", err)
+			}
+			os.Stdout.Write(bytes)
+		case "":
+			// Pretty print cluster details
+			t := template.Must(template.New("MachineV1PrintTemplate").Parse(common.MachineV1PrintTemplate))
+			if err := t.Execute(os.Stdout, cs.Machines); err != nil {
+				log.Fatalf("Could not pretty print cluster details: %s", err)
+			}
+		default:
+			log.Fatalf("Unsupported output format %q", outputFmt)
+		}
 	},
 }
 
@@ -408,6 +436,4 @@ func init() {
 	machineCmdDelete.Flags().IntVar(&drainGracePeriodSeconds, "drain-graceperiod", common.DRAIN_GRACE_PERIOD_SECONDS, "Period of time in seconds given to each pod to terminate gracefully. If negative, the default value specified in the pod will be used.")
 
 	getCmd.AddCommand(machineCmdGet)
-	machineCmdGet.Flags().String("name", "", "Machine name")
-
 }
