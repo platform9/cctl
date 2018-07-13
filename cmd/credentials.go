@@ -29,6 +29,8 @@ var credentialsCmdCreate = &cobra.Command{
 		if err := statefileutil.WriteStateFile(&cs); err != nil {
 			log.Fatalf("error reading state: %v", err)
 		}
+		log.Printf("Credentials created with user:%s and privateKey file: %s",
+			cmd.Flag("user").Value.String(), cmd.Flag("privateKey").Value.String())
 	},
 }
 

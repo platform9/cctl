@@ -2,7 +2,6 @@ package statefileutil
 
 import (
 	"io/ioutil"
-	"log"
 	"os"
 
 	"github.com/ghodss/yaml"
@@ -30,7 +29,6 @@ func ReadStateFile() (common.ClusterState, error) {
 	if ret == false {
 		return *cs, nil
 	}
-	log.Print("Using the existing state file")
 	d, err := ioutil.ReadFile(STATE_FILE_PATH)
 	if err != nil {
 		return *cs, err
@@ -98,4 +96,9 @@ func DeleteProvisionedMachine(cs *common.ClusterState, ip string) {
 			return
 		}
 	}
+}
+
+// DeleteStateFile deletes the cluster state file
+func DeleteStateFile() error {
+	return os.Remove(STATE_FILE_PATH)
 }

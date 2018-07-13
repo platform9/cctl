@@ -18,6 +18,8 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
+var forceDelete bool
+
 // clusterCmd represents the cluster command
 var clusterCmdCreate = &cobra.Command{
 	Use:   "cluster",
@@ -97,7 +99,7 @@ var clusterCmdCreate = &cobra.Command{
 		if err := statefileutil.WriteStateFile(&cs); err != nil {
 			log.Fatalf("error reading state: %v", err)
 		}
-		log.Println("[pf9-clusteradm] Cluster created successfully.")
+		log.Println("Cluster created successfully.")
 	},
 }
 
@@ -175,8 +177,46 @@ var clusterCmdDelete = &cobra.Command{
 	Use:   "cluster",
 	Short: "Deletes a node to the cluster",
 	Run: func(cmd *cobra.Command, args []string) {
-		// Stub code
-		fmt.Println("Running cluster delete")
+		log.Println("Running cluster delete")
+		cs, err := statefileutil.ReadStateFile()
+		if err != nil {
+			log.Fatalf("Failed to read cluster state file. Cannot delete cluster: %s", err)
+		}
+		if forceDelete {
+			log.Println("Note: Forceful delete of cluster! Deleting cluster metadata")
+			// Unset all objects created by the create cluster call
+			cs.Cluster = clusterv1.Cluster{}
+			cs.APIServerCA = nil
+			cs.EtcdCA = nil
+			cs.FrontProxyCA = nil
+			cs.K8sVersion = ""
+			cs.ServiceAccountKey = nil
+			cs.VIPConfiguration = common.VIPConfigurationType{}
+			if err := statefileutil.WriteStateFile(&cs); err != nil {
+				log.Fatalf("Unable to write cluster state file: %s", err)
+			}
+			return
+		}
+		if len(cs.Machines) > 0 {
+			// There is alteast one machine present in the cluster. Don't continue delete
+			var machineNames []string
+			for _, machine := range cs.Machines {
+				machineNames = append(machineNames, machine.ObjectMeta.Name)
+			}
+			log.Fatalf("Machines [%s] part of cluster. Please delete them before calling cluster delete.", machineNames)
+		}
+		// Unset all objects created by the create cluster call
+		cs.Cluster = clusterv1.Cluster{}
+		cs.APIServerCA = nil
+		cs.EtcdCA = nil
+		cs.FrontProxyCA = nil
+		cs.K8sVersion = ""
+		cs.ServiceAccountKey = nil
+		cs.VIPConfiguration = common.VIPConfigurationType{}
+		if err := statefileutil.WriteStateFile(&cs); err != nil {
+			log.Fatalf("Unable to write cluster state file: %s", err)
+		}
+		log.Println("Cluster deleted successfully")
 	},
 }
 
@@ -231,7 +271,7 @@ func init() {
 	//clusterCmdCreate.Flags().String("version", "1.10.2", "Kubernetes version")
 
 	deleteCmd.AddCommand(clusterCmdDelete)
-	deleteCmd.Flags().String("force", "", "Force delete a cluster")
+	deleteCmd.Flags().BoolVar(&forceDelete, "force", false, "Force delete a cluster")
 
 	getCmd.AddCommand(clusterCmdGet)
 	upgradeCmd.AddCommand(clusterCmdUpgrade)
