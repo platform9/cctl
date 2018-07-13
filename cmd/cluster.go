@@ -1,12 +1,16 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
+	"os"
 	"strconv"
+	"text/template"
 
+	"github.com/ghodss/yaml"
 	sshproviderv1 "github.com/platform9/ssh-provider/sshproviderconfig/v1alpha1"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
@@ -19,6 +23,7 @@ import (
 )
 
 var forceDelete bool
+var outputFmt string
 
 // clusterCmd represents the cluster command
 var clusterCmdCreate = &cobra.Command{
@@ -225,9 +230,40 @@ var clusterCmdDelete = &cobra.Command{
 var clusterCmdGet = &cobra.Command{
 	Use:   "cluster",
 	Short: "Get the cluster details",
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 1 {
+			return cobra.MaximumNArgs(1)(cmd, args)
+		}
+		return nil
+	},
 	Run: func(cmd *cobra.Command, args []string) {
-		// Stub code
-		fmt.Println("Running get cluster")
+		cs, err := statefileutil.ReadStateFile()
+		if err != nil {
+			log.Fatalf("Unable to read cluster spec file: %s", err)
+		}
+		if outputFmt == "yaml" {
+			// Flag yaml specificed. Print cluster spec as yaml
+			bytes, err := yaml.Marshal(cs.Cluster)
+			if err != nil {
+				log.Fatalf("Unable to marshal cluster spec file to yaml: %s", err)
+			}
+			os.Stdout.Write(bytes)
+			return
+		}
+		if outputFmt == "json" {
+			// Flag json specified. Print cluster spec as json
+			bytes, err := json.Marshal(cs.Cluster)
+			if err != nil {
+				log.Fatalf("Unable to marshal cluster spec file to json: %s", err)
+			}
+			os.Stdout.Write(bytes)
+			return
+		}
+		// Pretty print cluster details
+		t := template.Must(template.New("ClusterV1PrintTemplate").Parse(common.ClusterV1PrintTemplate))
+		if err := t.Execute(os.Stdout, cs); err != nil {
+			log.Fatalf("Could not pretty print cluster details: %s", err)
+		}
 	},
 }
 
@@ -276,6 +312,8 @@ func init() {
 	deleteCmd.Flags().BoolVar(&forceDelete, "force", false, "Force delete a cluster")
 
 	getCmd.AddCommand(clusterCmdGet)
+	clusterCmdGet.Flags().StringVar(&outputFmt, "o", "", "output format json|yaml|wide")
+
 	upgradeCmd.AddCommand(clusterCmdUpgrade)
 	recoverCmd.AddCommand(clusterCmdRecover)
 	backupCmd.AddCommand(clusterCmdBackup)
