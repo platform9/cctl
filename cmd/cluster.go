@@ -230,12 +230,6 @@ var clusterCmdDelete = &cobra.Command{
 var clusterCmdGet = &cobra.Command{
 	Use:   "cluster",
 	Short: "Get the cluster details",
-	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) > 1 {
-			return cobra.MaximumNArgs(1)(cmd, args)
-		}
-		return nil
-	},
 	Run: func(cmd *cobra.Command, args []string) {
 		cs, err := statefileutil.ReadStateFile()
 		if err != nil {
