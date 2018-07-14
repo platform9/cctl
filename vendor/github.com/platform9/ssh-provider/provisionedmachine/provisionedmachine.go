@@ -18,7 +18,7 @@ type ProvisionedMachine struct {
 	// Network interface chosen to create the virtual IP. If it is not specified,
 	// the interface of the default gateway is chosen.
 	// +optional
-	VIPNetworkInterface string `json:"vipNetworkInterface,omitEmpty"`
+	VIPNetworkInterface string `json:"vipNetworkInterface,omitempty"`
 }
 
 // NewFromConfigMap creates a ProvisionedMachine from a ConfigMap

@@ -24,34 +24,13 @@
 #   go-tests = true
 #   unused-packages = true
 
-
-[[constraint]]
-  name = "github.com/google/easypki"
-  version = "1.1.0"
-
-[[constraint]]
-  name = "github.com/google/uuid"
-  version = "0.2.0"
-
-[[constraint]]
-  branch = "master"
-  name = "github.com/mitchellh/go-homedir"
-
 [[constraint]]
   name = "github.com/spf13/cobra"
   version = "0.0.3"
 
 [[constraint]]
-  name = "github.com/spf13/viper"
-  version = "1.0.2"
-
-[[constraint]]
   branch = "master"
   name = "golang.org/x/crypto"
-
-[[constraint]]
-  name = "gopkg.in/yaml.v2"
-  version = "2.2.1"
 
 [[constraint]]
   name = "sigs.k8s.io/cluster-api"
