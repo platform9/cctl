@@ -8,12 +8,6 @@
   revision = "75cd24fc2f2c2a2088577d12123ddee5f54e0675"
 
 [[projects]]
-  name = "github.com/Jeffail/gabs"
-  packages = ["."]
-  revision = "7a0fed31069aba77993a518cc2f37b28ee7aa883"
-  version = "1.1"
-
-[[projects]]
   name = "github.com/NYTimes/gziphandler"
   packages = ["."]
   revision = "2600fb119af974220d3916a5916d6e31176aac1b"
@@ -315,7 +309,7 @@
     "sshproviderconfig",
     "sshproviderconfig/v1alpha1"
   ]
-  revision = "f59dc1f48b8a8e192b90acb1113cdde230af1174"
+  revision = "cb86de4cc08be34465f2f19c35a8b095668a3d6f"
 
 [[projects]]
   name = "github.com/prometheus/client_golang"
@@ -797,27 +791,18 @@
   branch = "release-1.9"
   name = "k8s.io/kubernetes"
   packages = [
-    "cmd/kubeadm/app/apis/kubeadm",
-    "cmd/kubeadm/app/apis/kubeadm/v1alpha1",
-    "cmd/kubeadm/app/constants",
-    "cmd/kubeadm/app/features",
     "pkg/apis/core",
     "pkg/apis/core/helper",
     "pkg/apis/core/v1/helper",
     "pkg/apis/core/v1/helper/qos",
     "pkg/kubelet/apis/kubeletconfig",
-    "pkg/kubelet/apis/kubeletconfig/scheme",
     "pkg/kubelet/apis/kubeletconfig/v1alpha1",
     "pkg/kubelet/qos",
     "pkg/kubelet/types",
     "pkg/master/ports",
     "pkg/proxy/apis/kubeproxyconfig",
-    "pkg/proxy/apis/kubeproxyconfig/scheme",
     "pkg/proxy/apis/kubeproxyconfig/v1alpha1",
-    "pkg/registry/core/service/allocator",
-    "pkg/registry/core/service/ipallocator",
-    "pkg/util/pointer",
-    "pkg/util/version"
+    "pkg/util/pointer"
   ]
   revision = "57729ea3d9a1b75f3fc7bbbadc597ba707d47c8a"
 

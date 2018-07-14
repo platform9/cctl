@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/ghodss/yaml"
+
 	"github.com/pkg/sftp"
 	"github.com/platform9/ssh-provider/provisionedmachine"
 
@@ -70,11 +72,11 @@ func (sa *SSHActuator) Create(cluster *clusterv1.Cluster, machine *clusterv1.Mac
 		return fmt.Errorf("error creating machine: error parsing ProvisionedMachine from ConfigMap %q: %s", sa.provisionedMachineConfigMap.Name, err)
 	}
 	if clusterutil.IsMaster(machine) {
-		if err := sa.createMaster(pm, cluster, machine, client); err != nil {
+		if err := sa.createMaster(cluster, machine, pm, client); err != nil {
 			return fmt.Errorf("error creating machine %q: %s", machine.Name, err)
 		}
 	} else {
-		if err := sa.createNode(cluster, machine, client); err != nil {
+		if err := sa.createNode(cluster, machine, pm, client); err != nil {
 			return fmt.Errorf("error creating machine %q: %s", machine.Name, err)
 		}
 	}
@@ -85,17 +87,12 @@ func chooseEtcdEndpoint(members []sshconfigv1.EtcdMember) string {
 	return members[0].ClientURLs[0]
 }
 
-func (sa *SSHActuator) createMaster(pm *provisionedmachine.ProvisionedMachine, cluster *clusterv1.Cluster, machine *clusterv1.Machine, client *ssh.Client) error {
+func (sa *SSHActuator) createMaster(cluster *clusterv1.Cluster, machine *clusterv1.Machine, pm *provisionedmachine.ProvisionedMachine, client *ssh.Client) error {
 	var err error
 
-	nodeadmConfiguration, err := sa.NewNodeadmConfiguration(pm, cluster, machine)
+	nodeadmInitConfiguration, err := sa.NodeadmInitConfigurationForMachine(pm, cluster, machine)
 	if err != nil {
-		return err
-	}
-
-	mcb, err := MarshalToYAMLWithFixedKubeProxyFeatureGates(nodeadmConfiguration)
-	if err != nil {
-		return err
+		return fmt.Errorf("error creating nodeadm configuration: %v", err)
 	}
 
 	sftp, err := sftp.NewClient(client)
@@ -104,11 +101,15 @@ func (sa *SSHActuator) createMaster(pm *provisionedmachine.ProvisionedMachine, c
 	}
 	defer sftp.Close()
 
+	nodeadmInitConfigurationBytes, err := yaml.Marshal(nodeadmInitConfiguration)
+	if err != nil {
+		return fmt.Errorf("error marshalling nodeadm configuration to yaml: %v", err)
+	}
 	f, err := sftp.Create("/tmp/nodeadm.yaml")
 	if err != nil {
 		return fmt.Errorf("error creating kubeadm.yaml: %s", err)
 	}
-	if _, err := f.Write(mcb); err != nil {
+	if _, err := f.Write(nodeadmInitConfigurationBytes); err != nil {
 		return fmt.Errorf("error writing kubeadm.yaml: %s", err)
 	}
 	sa.writeCAs(sftp)
@@ -246,13 +247,38 @@ func (sa *SSHActuator) writeCAs(sftp *sftp.Client) error {
 	return err
 }
 
-func (sa *SSHActuator) createNode(cluster *clusterv1.Cluster, machine *clusterv1.Machine, client *ssh.Client) error {
+func (sa *SSHActuator) createNode(cluster *clusterv1.Cluster, machine *clusterv1.Machine, pm *provisionedmachine.ProvisionedMachine, client *ssh.Client) error {
 	session, err := client.NewSession()
 	if err != nil {
 		return fmt.Errorf("error creating new SSH session for machine %q: %s", machine.Name, err)
 	}
 	defer session.Close()
-	cmd := fmt.Sprintf("/opt/bin/nodeadm join --master %s --token %s --cahash %s",
+
+	nodeadmJoinConfiguration, err := sa.NodeadmJoinConfigurationForMachine(pm, cluster, machine)
+	if err != nil {
+		return fmt.Errorf("error creating nodeadm configuration: %v", err)
+	}
+
+	sftp, err := sftp.NewClient(client)
+	if err != nil {
+		return fmt.Errorf("error creating SFTP client: %s", err)
+	}
+	defer sftp.Close()
+
+	nodeadmJoinConfigurationBytes, err := yaml.Marshal(nodeadmJoinConfiguration)
+	if err != nil {
+		return fmt.Errorf("error marshalling nodeadm configuration to yaml: %v", err)
+	}
+	f, err := sftp.Create("/tmp/nodeadm.yaml")
+	if err != nil {
+		return fmt.Errorf("error creating kubeadm.yaml: %s", err)
+	}
+	if _, err := f.Write(nodeadmJoinConfigurationBytes); err != nil {
+		return fmt.Errorf("error writing kubeadm.yaml: %s", err)
+	}
+
+	cmd := fmt.Sprintf("/opt/bin/nodeadm join --cfg %s --master %s --token %s --cahash %s",
+		"/tmp/nodeadm.yaml",
 		getAPIEndPoint(cluster),
 		string(sa.clusterToken.Data["token"]),
 		string(sa.clusterToken.Data["cahash"]))
