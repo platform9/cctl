@@ -91,27 +91,24 @@ func DeleteEtcdMemberFromClusterState(cs *common.ClusterState, machine *clusterv
 
 	machineProviderStatus := sshproviderv1.SSHMachineProviderStatus{}
 	err = spv1Codec.DecodeFromProviderStatus(machine.Status.ProviderStatus, &machineProviderStatus)
+
 	if err != nil {
 		log.Fatalf("Could not decode machine status from cluster state: %v", err)
 	}
 	for i, member := range clusterProviderStatus.EtcdMembers {
-		for _, memberClientURL := range member.ClientURLs {
-			for _, machineClientURL := range machineProviderStatus.EtcdMember.ClientURLs {
-				if memberClientURL == machineClientURL {
-					log.Printf("Removing %s from etcd members in cluster state", machine.Name)
-					// Delete element without leaking memory.
-					// See https://github.com/golang/go/wiki/SliceTricks
-					copy(clusterProviderStatus.EtcdMembers[i:], clusterProviderStatus.EtcdMembers[i+1:])
-					clusterProviderStatus.EtcdMembers[len(clusterProviderStatus.EtcdMembers)-1] = sshproviderv1.EtcdMember{}
-					clusterProviderStatus.EtcdMembers = clusterProviderStatus.EtcdMembers[:len(clusterProviderStatus.EtcdMembers)-1]
-					encodedStatus, err := spv1Codec.EncodeToProviderStatus(&clusterProviderStatus)
-					if err != nil {
-						log.Fatal("Could not encode etcd member info to persist in cluster state")
-					}
-					cs.Cluster.Status.ProviderStatus = *encodedStatus
-					return
-				}
+		if member.ID == machineProviderStatus.EtcdMember.ID {
+			log.Printf("Removing %s from etcd members in cluster state", machine.Name)
+			// Delete element without leaking memory.
+			// See https://github.com/golang/go/wiki/SliceTricks
+			copy(clusterProviderStatus.EtcdMembers[i:], clusterProviderStatus.EtcdMembers[i+1:])
+			clusterProviderStatus.EtcdMembers[len(clusterProviderStatus.EtcdMembers)-1] = sshproviderv1.EtcdMember{}
+			clusterProviderStatus.EtcdMembers = clusterProviderStatus.EtcdMembers[:len(clusterProviderStatus.EtcdMembers)-1]
+			encodedStatus, err := spv1Codec.EncodeToProviderStatus(&clusterProviderStatus)
+			if err != nil {
+				log.Fatal("Could not encode etcd member info to persist in cluster state")
 			}
+			cs.Cluster.Status.ProviderStatus = *encodedStatus
+			return
 		}
 	}
 }
