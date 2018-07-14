@@ -2,11 +2,13 @@ package statefileutil
 
 import (
 	"io/ioutil"
+	"log"
 	"os"
 
 	"github.com/ghodss/yaml"
 	"github.com/platform9/pf9-clusteradm/common"
 	"github.com/platform9/ssh-provider/provisionedmachine"
+	sshproviderv1 "github.com/platform9/ssh-provider/sshproviderconfig/v1alpha1"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	"sigs.k8s.io/cluster-api/pkg/util"
 )
@@ -72,6 +74,44 @@ func DeleteMachine(cs *common.ClusterState, ip string) {
 			cs.Machines[len(cs.Machines)-1] = clusterv1.Machine{}
 			cs.Machines = cs.Machines[:len(cs.Machines)-1]
 			return
+		}
+	}
+}
+
+func DeleteEtcdMemberFromClusterState(cs *common.ClusterState, machine *clusterv1.Machine) {
+	spv1Codec, err := sshproviderv1.NewCodec()
+	if err != nil {
+		log.Fatalf("Could not initialize codec for internal types: %v", err)
+	}
+	clusterProviderStatus := sshproviderv1.SSHClusterProviderStatus{}
+	err = spv1Codec.DecodeFromProviderStatus(cs.Cluster.Status.ProviderStatus, &clusterProviderStatus)
+	if err != nil {
+		log.Fatalf("Could not decode cluster status from cluster state: %v", err)
+	}
+
+	machineProviderStatus := sshproviderv1.SSHMachineProviderStatus{}
+	err = spv1Codec.DecodeFromProviderStatus(machine.Status.ProviderStatus, &machineProviderStatus)
+	if err != nil {
+		log.Fatalf("Could not decode machine status from cluster state: %v", err)
+	}
+	for i, member := range clusterProviderStatus.EtcdMembers {
+		for _, memberClientURL := range member.ClientURLs {
+			for _, machineClientURL := range machineProviderStatus.EtcdMember.ClientURLs {
+				if memberClientURL == machineClientURL {
+					log.Printf("Removing %s from etcd members in cluster state", machine.Name)
+					// Delete element without leaking memory.
+					// See https://github.com/golang/go/wiki/SliceTricks
+					copy(clusterProviderStatus.EtcdMembers[i:], clusterProviderStatus.EtcdMembers[i+1:])
+					clusterProviderStatus.EtcdMembers[len(clusterProviderStatus.EtcdMembers)-1] = sshproviderv1.EtcdMember{}
+					clusterProviderStatus.EtcdMembers = clusterProviderStatus.EtcdMembers[:len(clusterProviderStatus.EtcdMembers)-1]
+					encodedStatus, err := spv1Codec.EncodeToProviderStatus(&clusterProviderStatus)
+					if err != nil {
+						log.Fatal("Could not encode etcd member info to persist in cluster state")
+					}
+					cs.Cluster.Status.ProviderStatus = *encodedStatus
+					return
+				}
+			}
 		}
 	}
 }

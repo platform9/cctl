@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	clustercommon "sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
+	clusterapiutil "sigs.k8s.io/cluster-api/pkg/util"
 )
 
 var (
@@ -178,10 +179,6 @@ var machineCmdCreate = &cobra.Command{
 		if err := provisionedMachine.ToConfigMap(cm); err != nil {
 			log.Fatalf("Error reading state: %v", err)
 		}
-		cs.ProvisionedMachines = append(cs.ProvisionedMachines, provisionedMachine)
-
-		machines := append(cs.Machines, machine)
-		cs.Machines = machines
 		var clusterToken *corev1.Secret
 		var kubeconfig []byte
 		if role == "node" {
@@ -234,9 +231,14 @@ var machineCmdCreate = &cobra.Command{
 			clusterProviderStatus.EtcdMembers = append(clusterProviderStatus.EtcdMembers, *machineProviderStatus.EtcdMember)
 			status, err := spv1Codec.EncodeToProviderStatus(&clusterProviderStatus)
 			if err != nil {
-				log.Fatalf("Failed to encode clusterProvider status with error %v", err)
+				log.Fatalf("Failed to encode cluster provider status with error %v", err)
 			}
 			cs.Cluster.Status.ProviderStatus = *status
+			status, err = spv1Codec.EncodeToProviderStatus(&machineProviderStatus)
+			if err != nil {
+				log.Fatalf("Failed to encode machine provider status with error %v", err)
+			}
+			machine.Status.ProviderStatus = *status
 		}
 		if role == "node" {
 			client := getClientForMachine(&provisionedMachine, cs.SSHCredentials)
@@ -244,6 +246,8 @@ var machineCmdCreate = &cobra.Command{
 				log.Fatalf("Failed to write admin kubeconfig to node: %v", err)
 			}
 		}
+		cs.ProvisionedMachines = append(cs.ProvisionedMachines, provisionedMachine)
+		cs.Machines = append(cs.Machines, machine)
 		if err := statefileutil.WriteStateFile(&cs); err != nil {
 			log.Fatalf("Error writing state: %v", err)
 		}
@@ -339,6 +343,10 @@ var machineCmdDelete = &cobra.Command{
 		log.Print("Updating state")
 		statefileutil.DeleteMachine(&cs, ip)
 		statefileutil.DeleteProvisionedMachine(&cs, ip)
+		if clusterapiutil.IsMaster(machine) {
+			log.Printf("Removing etcd member from cluster state")
+			statefileutil.DeleteEtcdMemberFromClusterState(&cs, machine)
+		}
 		if err := statefileutil.WriteStateFile(&cs); err != nil {
 			log.Fatalf("Error writing state: %v", err)
 		}
