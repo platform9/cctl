@@ -47,27 +47,39 @@ func clusterCreated(cs *common.ClusterState) bool {
 	}
 	return true
 }
-
-func masterExists(cs *common.ClusterState) bool {
-	if statefileutil.GetMaster(cs) == nil {
-		return false
-	}
-	return true
-}
-
-func validateRequirementsForCreate(cs *common.ClusterState, ip, role string) {
+func validateRequirementsForCreateOrDelete(cs *common.ClusterState) {
 	if !clusterCreated(cs) {
 		log.Fatalln("Cannot create machine without creating a cluster. Run create cluster first")
 	}
 	if cs.SSHCredentials == nil {
 		log.Fatalln("Cannot create machine without ssh credentials. Run create credentials first")
 	}
+}
+func validateRequirementsForCreate(cs *common.ClusterState, ip, role string) {
+	validateRequirementsForCreateOrDelete(cs)
+	if role != "node" && role != "master" {
+		log.Fatalln("Failed to create machine, invalid role (use node/master)")
+	}
 	if machineAlreadyExists(ip, cs) {
 		log.Fatalln("Failed to create machine, machine already exists")
 	}
 	if role == "node" {
-		if !masterExists(cs) {
+		if statefileutil.GetMasterCount(cs) == 0 {
 			log.Fatalln("Cannot create machine as node until master is created")
+		}
+	}
+}
+
+func validateRequirementsForDelete(cs *common.ClusterState, ip string) {
+	validateRequirementsForCreateOrDelete(cs)
+	machine := statefileutil.GetMachine(cs, ip)
+	if machine == nil {
+		log.Fatalf("Failed to delete machine, machine does not exist")
+	}
+	if clusterapiutil.IsMaster(machine) {
+		//if it is the last master and there are still nodes in the cluster
+		if statefileutil.GetMasterCount(cs) == 1 && statefileutil.GetNodeCount(cs) > 0 {
+			log.Fatalln("Failed to delete machine, cannot delete all masters as cluster has nodes")
 		}
 	}
 }
@@ -264,11 +276,6 @@ var machineCmdDelete = &cobra.Command{
 			log.Fatal(err)
 		}
 		cluster := &cs.Cluster
-		machine := statefileutil.GetMachine(&cs, ip)
-		if machine == nil {
-			log.Fatalf("Failed to delete machine: machine does not exist")
-		}
-
 		provisionedMachine := statefileutil.GetProvisionedMachine(&cs, ip)
 		cm := &corev1.ConfigMap{
 			Data: make(map[string]string),
@@ -279,6 +286,11 @@ var machineCmdDelete = &cobra.Command{
 		clusterToken := &corev1.Secret{
 			Data: make(map[string][]byte),
 		}
+
+		validateRequirementsForDelete(&cs, ip)
+
+		machine := statefileutil.GetMachine(&cs, ip)
+
 		actuator, err := sshMachineActuator.NewActuator(
 			cm,
 			cs.SSHCredentials,

@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	STATE_FILE_PATH = "/tmp/cluster-state.yaml"
+	STATE_FILE_PATH = "/etc/cctl-state.yaml"
 )
 
 func checkFileExists() (bool, error) {
@@ -54,6 +54,26 @@ func GetMaster(cs *common.ClusterState) *provisionedmachine.ProvisionedMachine {
 		}
 	}
 	return nil
+}
+
+func GetMasterCount(cs *common.ClusterState) int {
+	i := 0
+	for _, machine := range cs.Machines {
+		if util.IsMaster(&machine) {
+			i = i + 1
+		}
+	}
+	return i
+}
+
+func GetNodeCount(cs *common.ClusterState) int {
+	i := 0
+	for _, machine := range cs.Machines {
+		if !util.IsMaster(&machine) {
+			i = i + 1
+		}
+	}
+	return i
 }
 
 func GetMachine(cs *common.ClusterState, ip string) *clusterv1.Machine {

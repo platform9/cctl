@@ -293,13 +293,14 @@ func init() {
 	clusterCmdCreate.Flags().String("name", "example-cluster", "Name of the cluster")
 	clusterCmdCreate.Flags().String("serviceNetwork", "10.1.0.0/16", "Network CIDR for services e.g. 10.1.0.0/16")
 	clusterCmdCreate.Flags().String("podNetwork", "10.2.0.0/16", "Network CIDR for pods e.g. 10.2.0.0.16")
-	clusterCmdCreate.Flags().String("vip", "192.168.10.5", "VIP ip to be used for multi master setup")
-	clusterCmdCreate.Flags().String("routerID", "42", "Router ID for keepalived for multi master setup")
+	clusterCmdCreate.Flags().String("vip", "", "Virtual IP to be used for multi master setup")
+	clusterCmdCreate.Flags().String("routerID", "", "Virtual router ID for keepalived for multi master setup. Must be in the range [0, 254]. Must be unique within a single L2 network domain.")
 	clusterCmdCreate.Flags().String("cacert", "", "Location of file containing CA cert for components to trust")
 	clusterCmdCreate.Flags().String("cakey", "", "Location of file containing CA key for signing certs")
 	clusterCmdCreate.Flags().String("saPrivateKey", "", "Location of file containing private key used for sigining service account tokens")
 	clusterCmdCreate.Flags().String("saPublicKey", "", "Location of file containing public key used for sigining service account tokens")
-
+	clusterCmdCreate.MarkFlagRequired("vip")
+	clusterCmdCreate.MarkFlagRequired("routerID")
 	//clusterCmdCreate.Flags().String("version", "1.10.2", "Kubernetes version")
 
 	deleteCmd.AddCommand(clusterCmdDelete)
