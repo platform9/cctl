@@ -57,7 +57,9 @@ func validateRequirementsForCreateOrDelete(cs *common.ClusterState) {
 }
 func validateRequirementsForCreate(cs *common.ClusterState, ip, role string) {
 	validateRequirementsForCreateOrDelete(cs)
-
+	if role != "node" && role != "master" {
+		log.Fatalln("Failed to create machine, invalid role (use node/master)")
+	}
 	if machineAlreadyExists(ip, cs) {
 		log.Fatalln("Failed to create machine, machine already exists")
 	}
