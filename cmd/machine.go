@@ -217,8 +217,8 @@ var machineCmdCreate = &cobra.Command{
 			log.Fatalf("Unable to create machine actuator: %s", err)
 		}
 
-		cluster := cs.Cluster
-		err = actuator.Create(&cluster, &machine)
+		cluster := &cs.Cluster
+		err = actuator.Create(cluster, &machine)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -247,7 +247,7 @@ var machineCmdCreate = &cobra.Command{
 				}
 			}
 			log.Println("Updating cluster API endpoints")
-			statefileutil.UpsertAPIEndpoint(newEndpoint, &cluster)
+			statefileutil.UpsertAPIEndpoint(newEndpoint, cluster)
 
 			if len(clusterProviderStatus.EtcdMembers) == 0 {
 				clusterProviderStatus.EtcdMembers = []sshproviderv1.EtcdMember{}
@@ -296,7 +296,7 @@ var machineCmdDelete = &cobra.Command{
 		if err != nil {
 			log.Fatal(err)
 		}
-		cluster := cs.Cluster
+		cluster := &cs.Cluster
 		provisionedMachine := statefileutil.GetProvisionedMachine(&cs, ip)
 		cm := &corev1.ConfigMap{
 			Data: make(map[string]string),
@@ -368,7 +368,7 @@ var machineCmdDelete = &cobra.Command{
 		}
 
 		log.Printf("Deleting machine")
-		err = actuator.Delete(&cluster, machine)
+		err = actuator.Delete(cluster, machine)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -399,7 +399,7 @@ var machineCmdDelete = &cobra.Command{
 				}
 			}
 			log.Println("Updating cluster API endpoints")
-			statefileutil.DeleteAPIEndpoint(targetEndpoint, &cluster)
+			statefileutil.DeleteAPIEndpoint(targetEndpoint, cluster)
 		}
 		statefileutil.DeleteMachine(&cs, ip)
 		statefileutil.DeleteProvisionedMachine(&cs, ip)
