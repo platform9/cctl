@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	STATE_FILE_PATH = "/tmp/cluster-state.yaml"
+	STATE_FILE_PATH = "/etc/cctl-state.yaml"
 )
 
 func checkFileExists() (bool, error) {
