@@ -217,8 +217,8 @@ var machineCmdCreate = &cobra.Command{
 			log.Fatalf("Unable to create machine actuator: %s", err)
 		}
 
-		cluster := &cs.Cluster
-		err = actuator.Create(cluster, &machine)
+		cluster := cs.Cluster
+		err = actuator.Create(&cluster, &machine)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -228,10 +228,27 @@ var machineCmdCreate = &cobra.Command{
 			if err != nil {
 				log.Fatalf("Failed to decode cluster ProviderStatus: %v", err)
 			}
-			endPoint := clusterv1.APIEndpoint{}
-			endPoint.Host = provisionedMachine.SSHConfig.Host
-			endPoint.Port = common.DEFAULT_APISERVER_PORT
-			cluster.Status.APIEndpoints = append(cluster.Status.APIEndpoints, endPoint)
+
+			clusterProviderConfig := sshproviderv1.SSHClusterProviderConfig{}
+			err = spv1Codec.DecodeFromProviderConfig(cluster.Spec.ProviderConfig, &clusterProviderConfig)
+			if err != nil {
+				log.Fatalf("Failed to decode cluster ProviderConfig: %v", err)
+			}
+			var newEndpoint clusterv1.APIEndpoint
+			if len(clusterProviderConfig.VIPConfiguration.IP) != 0 {
+				newEndpoint = clusterv1.APIEndpoint{
+					Host: clusterProviderConfig.VIPConfiguration.IP.String(),
+					Port: common.DEFAULT_APISERVER_PORT,
+				}
+			} else {
+				newEndpoint = clusterv1.APIEndpoint{
+					Host: provisionedMachine.SSHConfig.Host,
+					Port: common.DEFAULT_APISERVER_PORT,
+				}
+			}
+			log.Println("Updating cluster API endpoints")
+			statefileutil.UpsertAPIEndpoint(newEndpoint, &cluster)
+
 			if len(clusterProviderStatus.EtcdMembers) == 0 {
 				clusterProviderStatus.EtcdMembers = []sshproviderv1.EtcdMember{}
 			}
@@ -270,12 +287,16 @@ var machineCmdDelete = &cobra.Command{
 	Use:   "machine",
 	Short: "Deletes a machine from the cluster",
 	Run: func(cmd *cobra.Command, args []string) {
+		spv1Codec, err := sshproviderv1.NewCodec()
+		if err != nil {
+			log.Fatalf("Could not initialize codec for internal types: %v", err)
+		}
 		ip := cmd.Flag("ip").Value.String()
 		cs, err := statefileutil.ReadStateFile()
 		if err != nil {
 			log.Fatal(err)
 		}
-		cluster := &cs.Cluster
+		cluster := cs.Cluster
 		provisionedMachine := statefileutil.GetProvisionedMachine(&cs, ip)
 		cm := &corev1.ConfigMap{
 			Data: make(map[string]string),
@@ -347,18 +368,41 @@ var machineCmdDelete = &cobra.Command{
 		}
 
 		log.Printf("Deleting machine")
-		err = actuator.Delete(cluster, machine)
+		err = actuator.Delete(&cluster, machine)
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		log.Print("Updating state")
-		statefileutil.DeleteMachine(&cs, ip)
-		statefileutil.DeleteProvisionedMachine(&cs, ip)
 		if clusterapiutil.IsMaster(machine) {
 			log.Printf("Removing etcd member from cluster state")
 			statefileutil.DeleteEtcdMemberFromClusterState(&cs, machine)
+
+			clusterProviderConfig := sshproviderv1.SSHClusterProviderConfig{}
+			err = spv1Codec.DecodeFromProviderConfig(cluster.Spec.ProviderConfig, &clusterProviderConfig)
+			if err != nil {
+				log.Fatalf("Failed to decode cluster ProviderConfig: %v", err)
+			}
+			var targetEndpoint clusterv1.APIEndpoint
+			if len(clusterProviderConfig.VIPConfiguration.IP) != 0 {
+				// If there is 1 master, it is being deleted.
+				if statefileutil.GetMasterCount(&cs) == 1 {
+					targetEndpoint = clusterv1.APIEndpoint{
+						Host: clusterProviderConfig.VIPConfiguration.IP.String(),
+						Port: common.DEFAULT_APISERVER_PORT,
+					}
+				}
+			} else {
+				targetEndpoint = clusterv1.APIEndpoint{
+					Host: provisionedMachine.SSHConfig.Host,
+					Port: common.DEFAULT_APISERVER_PORT,
+				}
+			}
+			log.Println("Updating cluster API endpoints")
+			statefileutil.DeleteAPIEndpoint(targetEndpoint, &cluster)
 		}
+		statefileutil.DeleteMachine(&cs, ip)
+		statefileutil.DeleteProvisionedMachine(&cs, ip)
 		if err := statefileutil.WriteStateFile(&cs); err != nil {
 			log.Fatalf("Error writing state: %v", err)
 		}

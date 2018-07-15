@@ -159,3 +159,25 @@ func DeleteProvisionedMachine(cs *common.ClusterState, ip string) {
 func DeleteStateFile() error {
 	return os.Remove(STATE_FILE_PATH)
 }
+
+func UpsertAPIEndpoint(newEndpoint clusterv1.APIEndpoint, cluster *clusterv1.Cluster) {
+	for _, endpoint := range cluster.Status.APIEndpoints {
+		if endpoint.Host == newEndpoint.Host && endpoint.Port == newEndpoint.Port {
+			return
+		}
+	}
+	cluster.Status.APIEndpoints = append(cluster.Status.APIEndpoints, newEndpoint)
+}
+
+func DeleteAPIEndpoint(targetEndpoint clusterv1.APIEndpoint, cluster *clusterv1.Cluster) {
+	for i, endpoint := range cluster.Status.APIEndpoints {
+		if endpoint.Host == targetEndpoint.Host && endpoint.Port == targetEndpoint.Port {
+			// Delete element without leaking memory.
+			// See https://github.com/golang/go/wiki/SliceTricks
+			copy(cluster.Status.APIEndpoints[i:], cluster.Status.APIEndpoints[i+1:])
+			cluster.Status.APIEndpoints[len(cluster.Status.APIEndpoints)-1] = clusterv1.APIEndpoint{}
+			cluster.Status.APIEndpoints = cluster.Status.APIEndpoints[:len(cluster.Status.APIEndpoints)-1]
+			return
+		}
+	}
+}
