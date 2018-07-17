@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/ghodss/yaml"
-	"github.com/platform9/pf9-clusteradm/common"
+	"github.com/platform9/cctl/common"
 	"github.com/platform9/ssh-provider/provisionedmachine"
 	sshproviderv1 "github.com/platform9/ssh-provider/sshproviderconfig/v1alpha1"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
