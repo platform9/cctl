@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/platform9/pf9-clusteradm/statefileutil"
+	"github.com/platform9/cctl/statefileutil"
 )
 
 func testReadStateFile() {

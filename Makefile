@@ -16,7 +16,7 @@ VERSION := $(PF9_VERSION)-$(BUILD_NUMBER)
 DETECTED_OS := $(shell uname -s)
 DEP_BIN_GIT := https://github.com/golang/dep/releases/download/v0.4.1/dep-$(DETECTED_OS)-amd64
 BIN := cctl
-REPO := pf9-clusteradm
+REPO := cctl
 PACKAGE_GOPATH := /go/src/github.com/platform9/$(REPO)
 DEP_TEST=$(shell which dep)
 

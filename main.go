@@ -1,6 +1,6 @@
 package main
 
-import "github.com/platform9/pf9-clusteradm/cmd"
+import "github.com/platform9/cctl/cmd"
 
 func main() {
 	cmd.Execute()

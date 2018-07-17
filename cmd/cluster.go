@@ -16,8 +16,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/platform9/pf9-clusteradm/common"
-	"github.com/platform9/pf9-clusteradm/statefileutil"
+	"github.com/platform9/cctl/common"
+	"github.com/platform9/cctl/statefileutil"
 	certutil "k8s.io/client-go/util/cert"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )

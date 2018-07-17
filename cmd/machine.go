@@ -13,9 +13,9 @@ import (
 	"strings"
 
 	"github.com/ghodss/yaml"
-	"github.com/platform9/pf9-clusteradm/common"
-	"github.com/platform9/pf9-clusteradm/machine"
-	"github.com/platform9/pf9-clusteradm/statefileutil"
+	"github.com/platform9/cctl/common"
+	"github.com/platform9/cctl/machine"
+	"github.com/platform9/cctl/statefileutil"
 	sshMachineActuator "github.com/platform9/ssh-provider/machine"
 	pm "github.com/platform9/ssh-provider/provisionedmachine"
 	sshproviderv1 "github.com/platform9/ssh-provider/sshproviderconfig/v1alpha1"

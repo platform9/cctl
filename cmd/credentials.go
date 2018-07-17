@@ -4,7 +4,7 @@ import (
 	"io/ioutil"
 	"log"
 
-	"github.com/platform9/pf9-clusteradm/statefileutil"
+	"github.com/platform9/cctl/statefileutil"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
 )
