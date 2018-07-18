@@ -1,30 +1,37 @@
 package cmd
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
+	"strings"
 	"text/template"
 	"time"
 
-	"log"
-	"strings"
+	"golang.org/x/crypto/ssh"
 
 	"github.com/ghodss/yaml"
-	"github.com/platform9/cctl/common"
-	"github.com/platform9/cctl/machine"
-	"github.com/platform9/cctl/statefileutil"
-	sshMachineActuator "github.com/platform9/ssh-provider/machine"
-	pm "github.com/platform9/ssh-provider/provisionedmachine"
-	sshproviderv1 "github.com/platform9/ssh-provider/sshproviderconfig/v1alpha1"
+
 	"github.com/spf13/cobra"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/platform9/cctl/common"
+	sshutil "github.com/platform9/cctl/pkg/util/ssh"
+
+	spv1 "github.com/platform9/ssh-provider/pkg/apis/sshprovider/v1alpha1"
+	machineActuator "github.com/platform9/ssh-provider/pkg/clusterapi/machine"
+	sputil "github.com/platform9/ssh-provider/pkg/controller"
+	sshmachine "github.com/platform9/ssh-provider/pkg/machine"
+	setsutil "github.com/platform9/ssh-provider/pkg/util/sets"
+
 	clustercommon "sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
-	clusterapiutil "sigs.k8s.io/cluster-api/pkg/util"
+	clusterutil "sigs.k8s.io/cluster-api/pkg/util"
+
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var (
@@ -32,411 +39,507 @@ var (
 	drainGracePeriodSeconds int
 )
 
-func machineAlreadyExists(ip string, cs *common.ClusterState) bool {
-	for _, machine := range cs.Machines {
-		if machine.Name == ip {
-			return true
-		}
-	}
-	return false
-}
-
-func clusterCreated(cs *common.ClusterState) bool {
-	if cs.Cluster.ObjectMeta.GetName() == "" {
-		return false
-	}
-	return true
-}
-func validateRequirementsForCreateOrDelete(cs *common.ClusterState) {
-	if !clusterCreated(cs) {
-		log.Fatalln("Cannot create machine without creating a cluster. Run create cluster first")
-	}
-	if cs.SSHCredentials == nil {
-		log.Fatalln("Cannot create machine without ssh credentials. Run create credentials first")
-	}
-}
-func validateRequirementsForCreate(cs *common.ClusterState, ip, role string) {
-	validateRequirementsForCreateOrDelete(cs)
-	if role != "node" && role != "master" {
-		log.Fatalln("Failed to create machine, invalid role (use node/master)")
-	}
-	if machineAlreadyExists(ip, cs) {
-		log.Fatalln("Failed to create machine, machine already exists")
-	}
-	if role == "node" {
-		if statefileutil.GetMasterCount(cs) == 0 {
-			log.Fatalln("Cannot create machine as node until master is created")
-		}
-	}
-}
-
-func validateRequirementsForDelete(cs *common.ClusterState, ip string) {
-	validateRequirementsForCreateOrDelete(cs)
-	machine := statefileutil.GetMachine(cs, ip)
-	if machine == nil {
-		log.Fatalf("Failed to delete machine, machine does not exist")
-	}
-	if clusterapiutil.IsMaster(machine) {
-		//if it is the last master and there are still nodes in the cluster
-		if statefileutil.GetMasterCount(cs) == 1 && statefileutil.GetNodeCount(cs) > 0 {
-			log.Fatalln("Failed to delete machine, cannot delete all masters as cluster has nodes")
-		}
-	}
-}
-
 // machineCmdCreate represents the machine create command
 var machineCmdCreate = &cobra.Command{
 	Use:   "machine",
 	Short: "Adds a machine to the cluster",
 	Run: func(cmd *cobra.Command, args []string) {
-		spv1Codec, err := sshproviderv1.NewCodec()
-		if err != nil {
-			log.Fatalf("Could not initialize codec for internal types: %v", err)
-		}
-
-		timestamp := v1.Now()
 		ip := cmd.Flag("ip").Value.String()
 		iface := cmd.Flag("iface").Value.String()
-		role := cmd.Flag("role").Value.String()
+		role := clustercommon.MachineRole(strings.Title(cmd.Flag("role").Value.String()))
+		// TODO(dlipovetsky) Move to master validation code
+		if role != clustercommon.MasterRole && role != clustercommon.NodeRole {
+			log.Fatalf("Machine role %q is not supported, must be %q or %q.", role, clustercommon.MasterRole, clustercommon.NodeRole)
+		}
 		port, err := strconv.Atoi(cmd.Flag("port").Value.String())
 		if err != nil {
 			log.Fatalf("Invalid port %v", err)
 		}
+		publicKeyFiles := cmd.Flag("publicKeys").Value.String()
 
-		cs, err := statefileutil.ReadStateFile()
-		if err != nil {
-			log.Fatal(err)
-		}
-		validateRequirementsForCreate(&cs, ip, role)
-
-		publicKeyPaths := cmd.Flag("publicKeys").Value
-		publicKeys := []string{}
-		if publicKeyPaths != nil && len(publicKeyPaths.String()) > 0 {
-			paths := strings.Split(publicKeyPaths.String(), ",")
-			for _, path := range paths {
-				file, err := os.Open(path)
-				if err != nil {
-					log.Fatalf("Failed to open public key file %q: %v", path, err)
-				}
-				defer file.Close()
-				lineReader := bufio.NewReader(file)
-				publicKeyBytes, isPrefix, err := lineReader.ReadLine()
-				if err != nil {
-					log.Fatalf("Failed to read public key from file %q: %v", path, err)
-				}
-				if isPrefix {
-					log.Fatalf("Failed to read public key from file %q: first line exceeds buffer size", path)
-				}
-				publicKeys = append(publicKeys, string(publicKeyBytes))
-			}
-		}
-
-		sshMachineProviderConfig := &sshproviderv1.SSHMachineProviderConfig{
-			TypeMeta: v1.TypeMeta{
-				APIVersion: "sshproviderconfig/v1alpha1",
-				Kind:       "SSHMachineProviderConfig",
-			},
-		}
-		providerConfig, err := spv1Codec.EncodeToProviderConfig(sshMachineProviderConfig)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		sshMachineProviderStatus := &sshproviderv1.SSHMachineProviderStatus{
-			TypeMeta: v1.TypeMeta{
-				APIVersion: "sshproviderconfig/v1alpha1",
-				Kind:       "SSHMachineProviderStatus",
-			},
-		}
-		providerStatus, err := spv1Codec.EncodeToProviderStatus(sshMachineProviderStatus)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		machine := clusterv1.Machine{
-			TypeMeta: v1.TypeMeta{
-				Kind:       "Machine",
-				APIVersion: "cluster.k8s.io/v1alpha1",
-			},
-			ObjectMeta: v1.ObjectMeta{
-				Name:              ip,
-				CreationTimestamp: timestamp,
-			},
-			Spec: clusterv1.MachineSpec{
-				Roles:          []clustercommon.MachineRole{clustercommon.MasterRole},
-				ProviderConfig: *providerConfig,
-			},
-			Status: clusterv1.MachineStatus{
-				ProviderStatus: *providerStatus,
-			},
-		}
-		if role == "master" {
-			machine.Spec.Roles = []clustercommon.MachineRole{clustercommon.MasterRole}
-		} else if role == "node" {
-			machine.Spec.Roles = []clustercommon.MachineRole{clustercommon.NodeRole}
-		}
-
-		provisionedMachine := pm.ProvisionedMachine{
-			SSHConfig: &sshproviderv1.SSHConfig{
-				Host:       ip,
-				Port:       port,
-				PublicKeys: publicKeys,
-			},
-			VIPNetworkInterface: iface,
-		}
-
-		cm := &corev1.ConfigMap{
-			Data: make(map[string]string),
-		}
-		if err := provisionedMachine.ToConfigMap(cm); err != nil {
-			log.Fatalf("Error reading state: %v", err)
-		}
-		var clusterToken *corev1.Secret
-		var kubeconfig []byte
-		if role == "node" {
-			clusterToken, kubeconfig = getSecretAndConfigFromMaster(cs)
-			if clusterToken == nil {
-				log.Fatalf("Failed to add . No master available")
-			}
-		}
-
-		actuator, err := sshMachineActuator.NewActuator(
-			cm,
-			cs.SSHCredentials,
-			cs.EtcdCA,
-			cs.APIServerCA,
-			cs.FrontProxyCA,
-			cs.ServiceAccountKey,
-			clusterToken,
-		)
-		if len(publicKeys) == 0 {
-			actuator.InsecureIgnoreHostKey = true
-			log.Printf("Not able to verify machine SSH identity: No public keys given. Continuing...")
-		}
-		if err != nil {
-			log.Fatalf("Unable to create machine actuator: %s", err)
-		}
-
-		cluster := &cs.Cluster
-		err = actuator.Create(cluster, &machine)
-		if err != nil {
-			log.Fatal(err)
-		}
-		if role == "master" {
-			clusterProviderStatus := sshproviderv1.SSHClusterProviderStatus{}
-			err := spv1Codec.DecodeFromProviderStatus(cluster.Status.ProviderStatus, &clusterProviderStatus)
+		var publicKeys []string
+		for _, file := range strings.Fields(publicKeyFiles) {
+			publicKey, err := sshutil.PublicKeyFromFile(file)
 			if err != nil {
-				log.Fatalf("Failed to decode cluster ProviderStatus: %v", err)
+				log.Fatalf("Unable to parse SSH public key from %q: %v", file, err)
 			}
+			publicKeys = append(publicKeys, string(ssh.MarshalAuthorizedKey(publicKey)))
+		}
 
-			clusterProviderConfig := sshproviderv1.SSHClusterProviderConfig{}
-			err = spv1Codec.DecodeFromProviderConfig(cluster.Spec.ProviderConfig, &clusterProviderConfig)
-			if err != nil {
-				log.Fatalf("Failed to decode cluster ProviderConfig: %v", err)
+		cluster, err := state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).Get(common.DefaultClusterName, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				log.Fatalf("No cluster found. Create a cluster before creating a machine.")
 			}
-			var newEndpoint clusterv1.APIEndpoint
-			if len(clusterProviderConfig.VIPConfiguration.IP) != 0 {
-				newEndpoint = clusterv1.APIEndpoint{
-					Host: clusterProviderConfig.VIPConfiguration.IP.String(),
-					Port: common.DEFAULT_APISERVER_PORT,
+			log.Fatalf("Unable to get cluster: %v", err)
+		}
+		sshCredentialSecret, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Get(common.DefaultSSHCredentialSecretName, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				log.Fatalf("No SSH credential found. Create a credential before creating a machine.")
+			}
+			log.Fatalf("Unable to get SSH credential secret: %v", err)
+		}
+
+		newSSHConfig := spv1.SSHConfig{
+			Host:       ip,
+			Port:       port,
+			PublicKeys: publicKeys,
+			CredentialSecret: corev1.LocalObjectReference{
+				Name: sshCredentialSecret.Name,
+			},
+		}
+
+		newProvisionedMachine, newMachine, err := newProvisionedMachineAndMachine(ip, role, iface, newSSHConfig)
+		if _, err := state.SPClient.SshproviderV1alpha1().ProvisionedMachines(common.DefaultNamespace).Create(newProvisionedMachine); err != nil {
+			log.Fatalf("Unable to create provisioned machine: %v", err)
+		}
+		if _, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).Create(newMachine); err != nil {
+			log.Fatalf("Unable to create machine: %v", err)
+		}
+
+		var masterMachine *clusterv1.Machine
+		var masterProvisionedMachine *spv1.ProvisionedMachine
+		if clusterutil.RoleContains(clustercommon.NodeRole, newMachine.Spec.Roles) {
+			var err error
+			masterMachine, masterProvisionedMachine, err = masterMachineAndProvisionedMachine()
+			if err != nil {
+				log.Fatalf("Unable to get a master machine and provisioned machine: %v", err)
+			}
+		}
+
+		if clusterutil.RoleContains(clustercommon.NodeRole, newMachine.Spec.Roles) {
+			log.Println("Getting a bootstrap token from a master")
+			newBootstrapTokenSecret, err := bootstrapTokenSecretFromMachine(masterMachine, masterProvisionedMachine)
+			if err != nil {
+				log.Fatalf("Unable to read bootstrap token from master: %v", err)
+			}
+			if _, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Get(common.DefaultBootstrapTokenSecretName, metav1.GetOptions{}); err != nil {
+				if !apierrors.IsNotFound(err) {
+					log.Fatalf("Unable to get bootstrap token secret: %v", err)
+				}
+				if _, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Create(newBootstrapTokenSecret); err != nil {
+					log.Fatalf("Unable to create bootstrap token secret: %v", err)
 				}
 			} else {
-				newEndpoint = clusterv1.APIEndpoint{
-					Host: provisionedMachine.SSHConfig.Host,
-					Port: common.DEFAULT_APISERVER_PORT,
+				if _, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Update(newBootstrapTokenSecret); err != nil {
+					log.Fatalf("Unable to update bootstrap token secret: %v", err)
 				}
 			}
-			log.Println("Updating cluster API endpoints")
-			statefileutil.UpsertAPIEndpoint(newEndpoint, cluster)
+		}
 
-			if len(clusterProviderStatus.EtcdMembers) == 0 {
-				clusterProviderStatus.EtcdMembers = []sshproviderv1.EtcdMember{}
-			}
-			machineProviderStatus := sshproviderv1.SSHMachineProviderStatus{}
-			err = spv1Codec.DecodeFromProviderStatus(machine.Status.ProviderStatus, &machineProviderStatus)
-			if err != nil {
-				log.Fatalf("Failed to decode machine ProviderStatus: %v", err)
-			}
-			clusterProviderStatus.EtcdMembers = append(clusterProviderStatus.EtcdMembers, *machineProviderStatus.EtcdMember)
-			status, err := spv1Codec.EncodeToProviderStatus(&clusterProviderStatus)
-			if err != nil {
-				log.Fatalf("Failed to encode cluster provider status with error %v", err)
-			}
-			cs.Cluster.Status.ProviderStatus = *status
-			status, err = spv1Codec.EncodeToProviderStatus(&machineProviderStatus)
-			if err != nil {
-				log.Fatalf("Failed to encode machine provider status with error %v", err)
-			}
-			machine.Status.ProviderStatus = *status
+		machineClientBuilder := sshmachine.NewClient
+		insecureIgnoreHostKey := false
+		if len(publicKeys) == 0 {
+			insecureIgnoreHostKey = true
+			log.Printf("Not able to verify machine SSH identity: No public keys given. Continuing...")
 		}
-		if role == "node" {
-			client := getClientForMachine(&provisionedMachine, cs.SSHCredentials)
-			if err := client.WriteFile("/etc/kubernetes/admin.conf", 0644, kubeconfig); err != nil {
-				log.Fatalf("Failed to write admin kubeconfig to node: %v", err)
+		actuator := machineActuator.NewActuator(
+			state.KubeClient,
+			state.ClusterClient,
+			state.SPClient,
+			machineClientBuilder,
+			insecureIgnoreHostKey,
+		)
+		if err = actuator.Create(cluster, newMachine); err != nil {
+			log.Fatalf("Unable to create machine: %v", err)
+		}
+
+		if clusterutil.RoleContains(clustercommon.NodeRole, newMachine.Spec.Roles) {
+			log.Println("Writing admin kubeconfig to machine")
+			kubeconfig, err := adminKubeconfigFromMachine(masterMachine, masterProvisionedMachine)
+			if err != nil {
+				log.Fatalf("Unable to get admin kubeconfig from master: %v", err)
+			}
+			if err := writeAdminKubeconfigToMachine(kubeconfig, newMachine, newProvisionedMachine); err != nil {
+				log.Fatalf("Unable to write admin kubeconfig to machine: %v", err)
 			}
 		}
-		cs.ProvisionedMachines = append(cs.ProvisionedMachines, provisionedMachine)
-		cs.Machines = append(cs.Machines, machine)
-		if err := statefileutil.WriteStateFile(&cs); err != nil {
-			log.Fatalf("Error writing state: %v", err)
+
+		log.Println("Updating cluster status")
+		machineStatus, err := sputil.GetMachineStatus(*newMachine)
+		if err != nil {
+			log.Fatalf("Unable to get machine %q status: %v", newMachine.Name, err)
 		}
+		if machineStatus.EtcdMember != nil {
+			clusterStatus, err := sputil.GetClusterStatus(*cluster)
+			if err != nil {
+				log.Fatalf("Unable to get cluster status: %v", err)
+			}
+
+			etcdMemberSet := setsutil.NewEtcdMemberSet(clusterStatus.EtcdMembers...)
+			etcdMemberSet.Insert(*machineStatus.EtcdMember)
+			clusterStatus.EtcdMembers = etcdMemberSet.List()
+
+			if err := sputil.PutClusterStatus(*clusterStatus, cluster); err != nil {
+				log.Fatalf("Unable to update cluster status: %v", err)
+			}
+			if _, err := state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).UpdateStatus(cluster); err != nil {
+				log.Fatalf("Unable to update cluster: %v", err)
+			}
+		}
+
+		if err := state.PullFromAPIs(); err != nil {
+			log.Fatalf("Unable to sync on-disk state: %v", err)
+		}
+
+		log.Println("Machine created successfully.")
 	},
+}
+
+func newProvisionedMachineAndMachine(name string, role clustercommon.MachineRole, vipNetworkInterface string, sshConfig spv1.SSHConfig) (*spv1.ProvisionedMachine, *clusterv1.Machine, error) {
+	newProvisionedMachine := spv1.ProvisionedMachine{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ProvisionedMachine",
+			APIVersion: "sshprovider.platform9.com/v1alpha1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              name,
+			Namespace:         common.DefaultNamespace,
+			CreationTimestamp: metav1.Now(),
+		},
+		Spec: spv1.ProvisionedMachineSpec{
+			SSHConfig:           &sshConfig,
+			VIPNetworkInterface: vipNetworkInterface,
+		},
+	}
+
+	newMachine := clusterv1.Machine{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Machine",
+			APIVersion: "cluster.k8s.io/v1alpha1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              name,
+			Namespace:         common.DefaultNamespace,
+			CreationTimestamp: metav1.Now(),
+		},
+		Spec: clusterv1.MachineSpec{
+			Roles: []clustercommon.MachineRole{role},
+		},
+		Status: clusterv1.MachineStatus{},
+	}
+
+	machineProviderSpec := spv1.MachineSpec{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "sshprovider.platform9.com/v1alpha1",
+			Kind:       "MachineSpec",
+		},
+		ProvisionedMachineName: newProvisionedMachine.Name,
+		Roles: []spv1.MachineRole{
+			spv1.MachineRole(role),
+		},
+	}
+	if err := sputil.PutMachineSpec(machineProviderSpec, &newMachine); err != nil {
+		return nil, nil, fmt.Errorf("unable to encode machine provider spec: %v", err)
+	}
+
+	machineProviderStatus := spv1.MachineStatus{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "sshprovider.platform9.com/v1alpha1",
+			Kind:       "MachineStatus",
+		},
+	}
+	if err := sputil.PutMachineStatus(machineProviderStatus, &newMachine); err != nil {
+		return nil, nil, fmt.Errorf("unable to encode machine provider status: %v", err)
+	}
+
+	if err := sputil.BindMachineAndProvisionedMachine(&newMachine, &newProvisionedMachine); err != nil {
+		return nil, nil, fmt.Errorf("unable to create bi-directional bind between machine and provisioned machine: %v", err)
+	}
+	return &newProvisionedMachine, &newMachine, nil
 }
 
 var machineCmdDelete = &cobra.Command{
 	Use:   "machine",
 	Short: "Deletes a machine from the cluster",
 	Run: func(cmd *cobra.Command, args []string) {
-		spv1Codec, err := sshproviderv1.NewCodec()
-		if err != nil {
-			log.Fatalf("Could not initialize codec for internal types: %v", err)
-		}
 		ip := cmd.Flag("ip").Value.String()
-		cs, err := statefileutil.ReadStateFile()
+
+		targetMachine, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).Get(ip, metav1.GetOptions{})
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("Unable to get machine %q: %v", ip, err)
 		}
-		cluster := &cs.Cluster
-		provisionedMachine := statefileutil.GetProvisionedMachine(&cs, ip)
-		cm := &corev1.ConfigMap{
-			Data: make(map[string]string),
+		targetMachineSpec, err := sputil.GetMachineSpec(*targetMachine)
+		if err != nil {
+			log.Fatalf("Unable to decode machine %q spec: %v", targetMachine.Name, err)
 		}
-		if err := provisionedMachine.ToConfigMap(cm); err != nil {
-			log.Fatalf("Error reading state: %v", err)
+		targetProvisionedMachine, err := state.SPClient.SshproviderV1alpha1().ProvisionedMachines(common.DefaultNamespace).Get(targetMachineSpec.ProvisionedMachineName, metav1.GetOptions{})
+		if err != nil {
+			log.Fatalf("Unable to get provisioned machine %q: %v", targetMachineSpec.ProvisionedMachineName, err)
 		}
-		clusterToken := &corev1.Secret{
-			Data: make(map[string][]byte),
+		cluster, err := state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).Get(common.DefaultClusterName, metav1.GetOptions{})
+		if err != nil {
+			log.Fatalf("Unable to get cluster: %v", err)
 		}
 
-		validateRequirementsForDelete(&cs, ip)
+		deleteMustNotOprhanNodes(targetMachine)
 
-		machine := statefileutil.GetMachine(&cs, ip)
+		if err := drainAndDeleteNodeForMachine(targetMachine, targetProvisionedMachine); err != nil {
+			log.Fatalf("Unable to drain and delete cluster node for machine %q: %v", targetMachine.Name, err)
+		}
 
-		actuator, err := sshMachineActuator.NewActuator(
-			cm,
-			cs.SSHCredentials,
-			cs.EtcdCA,
-			cs.APIServerCA,
-			cs.FrontProxyCA,
-			cs.ServiceAccountKey,
-			clusterToken,
-		)
-		if len(provisionedMachine.SSHConfig.PublicKeys) == 0 {
-			actuator.InsecureIgnoreHostKey = true
+		var insecureIgnoreHostKey bool = false
+		if len(targetProvisionedMachine.Spec.SSHConfig.PublicKeys) == 0 {
+			insecureIgnoreHostKey = true
 			log.Printf("Not able to verify machine SSH identity: No public keys given. Continuing...")
 		}
+		machineClientBuilder := sshmachine.NewClient
+		actuator := machineActuator.NewActuator(
+			state.KubeClient,
+			state.ClusterClient,
+			state.SPClient,
+			machineClientBuilder,
+			insecureIgnoreHostKey,
+		)
+		log.Println("Deleting machine")
+		if err = actuator.Delete(cluster, targetMachine); err != nil {
+			log.Fatalf("Unable to delete machine: %v", err)
+		}
+
+		log.Println("Updating cluster status")
+		machineStatus, err := sputil.GetMachineStatus(*targetMachine)
 		if err != nil {
-			log.Fatalf("Unable to create machine actuator: %s", err)
+			log.Fatalf("Unable to get machine %q status: %v", targetMachine.Name, err)
 		}
-
-		masterPM := statefileutil.GetMaster(&cs)
-		masterCM := &corev1.ConfigMap{
-			Data: make(map[string]string),
-		}
-		if err := masterPM.ToConfigMap(masterCM); err != nil {
-			log.Fatalf("Error reading state: %v", err)
-		}
-		masterClient := getClientForMachine(provisionedMachine, cs.SSHCredentials)
-
-		// TODO(dlipovetsky) Handle /opt/bin/kubectl not found. Possibly infer
-		// that the nodeadm reset ran at least as far as removing the kubectl
-		// binary. nodeName includes the object kind, i.e.,
-
-		// "node/the-name-of-the-node"
-		stdOut, stdErr, err := masterClient.RunCommand("/opt/bin/kubectl --kubeconfig=/etc/kubernetes/admin.conf get node --selector kubernetes.io/hostname=$(hostname -f) -oname")
-		if err != nil {
-			log.Fatalf("Could not identify the cluster node for machine %s: %s (%s) (%s)", ip, err, string(stdOut), string(stdErr))
-		}
-		nodeName := strings.TrimSpace(string(stdOut))
-		if len(nodeName) != 0 {
-			log.Printf("Draining cluster node %s for machine", nodeName)
-			// --ignore-daemonsets is used because critical components (kube-proxy, overlay network) run as daemonsets
-			// --delete-local-data is NOT used; pods using emptyDir volumes must be removed by the user, since removing them causes the data to be lost
-			// --force is NOT used; unmanaged pods must be removed by the user, since they won't be rescheduled to another node
-			stdOut, stdErr, err = masterClient.RunCommand(fmt.Sprintf("/opt/bin/kubectl --kubeconfig=/etc/kubernetes/admin.conf drain --timeout=%v --grace-period=%v --ignore-daemonsets %v", drainTimeout, drainGracePeriodSeconds, nodeName))
+		if machineStatus.EtcdMember != nil {
+			clusterStatus, err := sputil.GetClusterStatus(*cluster)
 			if err != nil {
-				log.Fatalf("Could not drain pods from cluster node %s: %s (%s) (%s)", ip, err, string(stdOut), string(stdErr))
+				log.Fatalf("Unable to get cluster status: %v", err)
 			}
-			log.Println(string(stdOut))
 
-			log.Printf("Deleting cluster node %s for machine", nodeName)
-			stdOut, stdErr, err = masterClient.RunCommand(fmt.Sprintf("/opt/bin/kubectl --kubeconfig=/etc/kubernetes/admin.conf delete %v", nodeName))
-			if err != nil {
-				log.Fatalf("Could not delete cluster node %s: %s (%s) (%s)", ip, err, string(stdOut), string(stdErr))
+			etcdMemberSet := setsutil.NewEtcdMemberSet(clusterStatus.EtcdMembers...)
+			etcdMemberSet.Delete(*machineStatus.EtcdMember)
+			clusterStatus.EtcdMembers = etcdMemberSet.List()
+
+			if err := sputil.PutClusterStatus(*clusterStatus, cluster); err != nil {
+				log.Fatalf("Unable to update cluster status: %v", err)
 			}
-			log.Println(string(stdOut))
+			if _, err := state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).UpdateStatus(cluster); err != nil {
+				log.Fatalf("Unable to update cluster: %v", err)
+			}
 		}
 
-		log.Printf("Deleting machine")
-		err = actuator.Delete(cluster, machine)
-		if err != nil {
-			log.Fatal(err)
+		if err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).Delete(targetMachine.Name, &metav1.DeleteOptions{}); err != nil {
+			log.Fatalf("unable to delete machine %q: %v", targetMachine.Name, err)
+		}
+		if err := state.SPClient.SshproviderV1alpha1().ProvisionedMachines(common.DefaultNamespace).Delete(targetProvisionedMachine.Name, &metav1.DeleteOptions{}); err != nil {
+			log.Fatalf("unable to delete provisioned machine %q: %v", targetProvisionedMachine.Name, err)
 		}
 
-		log.Print("Updating state")
-		if clusterapiutil.IsMaster(machine) {
-			log.Printf("Removing etcd member from cluster state")
-			statefileutil.DeleteEtcdMemberFromClusterState(&cs, machine)
+		if err := state.PullFromAPIs(); err != nil {
+			log.Fatalf("Unable to sync on-disk state: %v", err)
+		}
 
-			clusterProviderConfig := sshproviderv1.SSHClusterProviderConfig{}
-			err = spv1Codec.DecodeFromProviderConfig(cluster.Spec.ProviderConfig, &clusterProviderConfig)
-			if err != nil {
-				log.Fatalf("Failed to decode cluster ProviderConfig: %v", err)
-			}
-			var targetEndpoint clusterv1.APIEndpoint
-			if len(clusterProviderConfig.VIPConfiguration.IP) != 0 {
-				// If there is 1 master, it is being deleted.
-				if statefileutil.GetMasterCount(&cs) == 1 {
-					targetEndpoint = clusterv1.APIEndpoint{
-						Host: clusterProviderConfig.VIPConfiguration.IP.String(),
-						Port: common.DEFAULT_APISERVER_PORT,
-					}
-				}
-			} else {
-				targetEndpoint = clusterv1.APIEndpoint{
-					Host: provisionedMachine.SSHConfig.Host,
-					Port: common.DEFAULT_APISERVER_PORT,
-				}
-			}
-			log.Println("Updating cluster API endpoints")
-			statefileutil.DeleteAPIEndpoint(targetEndpoint, cluster)
-		}
-		statefileutil.DeleteMachine(&cs, ip)
-		statefileutil.DeleteProvisionedMachine(&cs, ip)
-		if err := statefileutil.WriteStateFile(&cs); err != nil {
-			log.Fatalf("Error writing state: %v", err)
-		}
-		log.Printf("Successfully deleted machine %s", ip)
+		log.Println("Machine deleted successfully.")
 	},
+}
+
+func deleteMustNotOprhanNodes(targetMachine *clusterv1.Machine) {
+	if clusterutil.RoleContains(clustercommon.MasterRole, targetMachine.Spec.Roles) {
+		machineList, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).List(metav1.ListOptions{})
+		if err != nil {
+			log.Fatalf("Unable to list machines: %v", err)
+		}
+		countMasters := 0
+		countNodes := 0
+		for _, machine := range machineList.Items {
+			for _, role := range machine.Spec.Roles {
+				switch role {
+				case clustercommon.MasterRole:
+					countMasters++
+				case clustercommon.NodeRole:
+					countNodes++
+				}
+			}
+		}
+		if countMasters == 1 && countNodes > 0 {
+			log.Fatalf("Not deleting last master while %v nodes are in the cluster. Delete the nodes first.", countNodes)
+		}
+	}
+}
+
+func bootstrapTokenSecretFromMachine(machine *clusterv1.Machine, provisionedMachine *spv1.ProvisionedMachine) (*corev1.Secret, error) {
+	machineClient, err := sshMachineClientFromSSHConfig(provisionedMachine.Spec.SSHConfig)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create machine client for machine %q: %v", machine.Name, err)
+	}
+	cmd := "/opt/bin/kubeadm token create --print-join-command"
+	stdOut, stdErr, err := machineClient.RunCommand(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("error running %q: %v (%s) (%s)", cmd, err, string(stdOut), string(stdErr))
+	}
+	token, caHash, err := tokenAndCAHashFromKubeadmJoinCommand(string(stdOut))
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse bootstrap token from stdout of %q: %q", cmd, stdOut)
+	}
+	secret := corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Secret",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              common.DefaultBootstrapTokenSecretName,
+			Namespace:         common.DefaultNamespace,
+			CreationTimestamp: metav1.Now(),
+		},
+		Data: map[string][]byte{
+			"token":  []byte(token),
+			"cahash": []byte(caHash),
+		},
+	}
+	return &secret, nil
+}
+
+func masterMachineAndProvisionedMachine() (*clusterv1.Machine, *spv1.ProvisionedMachine, error) {
+	machineList, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).List(metav1.ListOptions{})
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to list machines: %v", err)
+	}
+	var masterMachine *clusterv1.Machine
+	for _, machine := range machineList.Items {
+		if clusterutil.RoleContains(clustercommon.MasterRole, machine.Spec.Roles) {
+			// Choose first master in the list
+			masterMachine = machine.DeepCopy()
+			break
+		}
+	}
+	if masterMachine == nil {
+		return nil, nil, fmt.Errorf("unable to find any machine with Master role, cannot obtain bootstrap token")
+	}
+	masterMachineSpec, err := sputil.GetMachineSpec(*masterMachine)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to decode machine spec: %v", err)
+	}
+	masterProvisionedMachine, err := state.SPClient.SshproviderV1alpha1().ProvisionedMachines(common.DefaultNamespace).Get(masterMachineSpec.ProvisionedMachineName, metav1.GetOptions{})
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to get provisioned machine: %v", err)
+	}
+	return masterMachine, masterProvisionedMachine.DeepCopy(), nil
+}
+
+func tokenAndCAHashFromKubeadmJoinCommand(cmdStdout string) (string, string, error) {
+	fields := strings.Fields(cmdStdout)
+	//Successful output would be of the type
+	//kubeadm join <server:port> --token <token> --discovery-token-ca-cert-hash <sha>
+	if len(fields) != 7 { //TODO(puneet) Needs a better way but seems good-enough for now
+		return "", "", fmt.Errorf("expected 7 fields, found %v", len(fields))
+	}
+	token := fields[4]
+	caHash := fields[6]
+	return token, caHash, nil
+}
+
+func adminKubeconfigFromMachine(machine *clusterv1.Machine, provisionedMachine *spv1.ProvisionedMachine) ([]byte, error) {
+	machineClient, err := sshMachineClientFromSSHConfig(provisionedMachine.Spec.SSHConfig)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create machine client for machine %q: %v", machine.Name, err)
+	}
+	return machineClient.ReadFile("/etc/kubernetes/admin.conf")
+}
+
+func writeAdminKubeconfigToMachine(kubeconfig []byte, machine *clusterv1.Machine, provisionedMachine *spv1.ProvisionedMachine) error {
+	machineClient, err := sshMachineClientFromSSHConfig(provisionedMachine.Spec.SSHConfig)
+	if err != nil {
+		return fmt.Errorf("unable to create machine client for machine %q: %v", machine.Name, err)
+	}
+	return machineClient.WriteFile("/etc/kubernetes/admin.conf", 0600, kubeconfig)
+}
+
+func drainAndDeleteNodeForMachine(targetMachine *clusterv1.Machine, targetProvisionedMachine *spv1.ProvisionedMachine) error {
+	targetMachineClient, err := sshMachineClientFromSSHConfig(targetProvisionedMachine.Spec.SSHConfig)
+	if err != nil {
+		return fmt.Errorf("unable to create machine client for machine %q: %v", targetMachine.Name, err)
+	}
+
+	// TODO(dlipovetsky) Handle /opt/bin/kubectl not found. Possibly infer
+	// that the nodeadm reset ran at least as far as removing the kubectl
+	// binary. nodeName includes the object kind, i.e.,
+
+	// "node/the-name-of-the-node"
+	stdOut, stdErr, err := targetMachineClient.RunCommand("/opt/bin/kubectl --kubeconfig=/etc/kubernetes/admin.conf get node --selector kubernetes.io/hostname=$(hostname -f) -oname")
+	if err != nil {
+		return fmt.Errorf("unable to identify the cluster node: %v (%s) (%s)", err, string(stdOut), string(stdErr))
+	}
+	nodeName := strings.TrimSpace(string(stdOut))
+	if len(nodeName) != 0 {
+		log.Printf("Draining cluster node %q for machine %q", nodeName, targetMachine.Name)
+		// --ignore-daemonsets is used because critical components (kube-proxy, overlay network) run as daemonsets
+		// --delete-local-data is NOT used; pods using emptyDir volumes must be removed by the user, since removing them causes the data to be lost
+		// --force is NOT used; unmanaged pods must be removed by the user, since they won't be rescheduled to another node
+		stdOut, stdErr, err = targetMachineClient.RunCommand(fmt.Sprintf("/opt/bin/kubectl --kubeconfig=/etc/kubernetes/admin.conf drain --timeout=%v --grace-period=%v --ignore-daemonsets %v", drainTimeout, drainGracePeriodSeconds, nodeName))
+		if err != nil {
+			return fmt.Errorf("unable to drain cluster node %q: %v (%s) (%s)", nodeName, err, string(stdOut), string(stdErr))
+		}
+		log.Println(string(stdOut))
+
+		log.Printf("Deleting cluster node %q for machine %q", nodeName, targetMachine.Name)
+		stdOut, stdErr, err = targetMachineClient.RunCommand(fmt.Sprintf("/opt/bin/kubectl --kubeconfig=/etc/kubernetes/admin.conf delete %v", nodeName))
+		if err != nil {
+			return fmt.Errorf("unable to delete cluster node %q: %v (%s) (%s)", nodeName, err, string(stdOut), string(stdErr))
+		}
+		log.Println(string(stdOut))
+	}
+	return nil
+}
+
+func sshMachineClientFromSSHConfig(sshConfig *spv1.SSHConfig) (sshmachine.Client, error) {
+	sshCredentialSecret, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Get(sshConfig.CredentialSecret.Name, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, fmt.Errorf("unable to find SSH credential %q", sshConfig.CredentialSecret.Name)
+		}
+		return nil, fmt.Errorf("unable to get SSH credential secret: %v", err)
+	}
+	username, privateKey, err := sputil.UsernameAndKeyFromSecret(sshCredentialSecret)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read SSH credential from secret: %v", err)
+	}
+	var insecureIgnoreHostKey bool
+	if len(sshConfig.PublicKeys) == 0 {
+		insecureIgnoreHostKey = true
+		log.Printf("Not able to verify machine SSH identity: No public keys given. Continuing...")
+	}
+	return sshmachine.NewClient(sshConfig.Host, sshConfig.Port, username, privateKey, sshConfig.PublicKeys, insecureIgnoreHostKey)
 }
 
 var machineCmdGet = &cobra.Command{
 	Use:   "machine",
-	Short: "Get a machine",
+	Short: "Get machine resources",
 	Run: func(cmd *cobra.Command, args []string) {
-		cs, err := statefileutil.ReadStateFile()
-		if err != nil {
-			log.Fatalf("Unable to read state file: %s", err)
+		ip := cmd.Flag("ip").Value.String()
+		var machineList *clusterv1.MachineList
+		if len(ip) == 0 {
+			var err error
+			machineList, err = state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).List(metav1.ListOptions{})
+			if err != nil {
+				log.Fatalf("Unable to list machines: %v", err)
+			}
+		} else {
+			machine, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).Get(ip, metav1.GetOptions{})
+			if err != nil {
+				log.Fatalf("Unable to get machine %q: %v", ip, err)
+			}
+			machineList = &clusterv1.MachineList{
+				Items: []clusterv1.Machine{*machine},
+			}
 		}
 		switch outputFmt {
 		case "yaml":
-			// Flag yaml specificed. Print cluster spec as yaml
-			bytes, err := yaml.Marshal(cs.Machines)
+			bytes, err := yaml.Marshal(machineList.Items)
 			if err != nil {
 				log.Fatalf("Unable to marshal cluster spec file to yaml: %s", err)
 			}
 			os.Stdout.Write(bytes)
 		case "json":
-			// Flag json specified. Print cluster spec as json
-			bytes, err := json.Marshal(cs.Machines)
+			bytes, err := json.Marshal(machineList.Items)
 			if err != nil {
 				log.Fatalf("Unable to marshal cluster spec file to json: %s", err)
 			}
 			os.Stdout.Write(bytes)
 		case "":
-			// Pretty print cluster details
 			t := template.Must(template.New("MachineV1PrintTemplate").Parse(common.MachineV1PrintTemplate))
-			if err := t.Execute(os.Stdout, cs.Machines); err != nil {
+			if err := t.Execute(os.Stdout, machineList.Items); err != nil {
 				log.Fatalf("Could not pretty print cluster details: %s", err)
 			}
 		default:
@@ -445,50 +548,11 @@ var machineCmdGet = &cobra.Command{
 	},
 }
 
-func getClientForMachine(pm *pm.ProvisionedMachine, credentials *corev1.Secret) machine.Client {
-	client, err := machine.NewClient(pm.SSHConfig.Host,
-		pm.SSHConfig.Port,
-		string(credentials.Data["username"]),
-		string(credentials.Data["ssh-privatekey"]),
-		pm.SSHConfig.PublicKeys, true)
-	if err != nil {
-		log.Fatalf("Failed to get client for machine %s", pm.SSHConfig.Host)
-	}
-	return client
-}
-
-func getSecretAndConfigFromMaster(cs common.ClusterState) (*corev1.Secret, []byte) {
-	pm := statefileutil.GetMaster(&cs)
-	client := getClientForMachine(pm, cs.SSHCredentials)
-	output, errOutput, err := client.RunCommand("/opt/bin/kubeadm token create --print-join-command")
-	if err != nil {
-		log.Fatalf("Could not get token from master %s", pm.SSHConfig.Host)
-		log.Fatalf(string(errOutput))
-	}
-	values := strings.Split(string(output), " ")
-	//Successful output would be of the type
-	//kubeadm join <server:port> --token <token> --discovery-token-ca-cert-hash <sha>
-	if len(values) != 7 { //TODO Needs a better way but seems good-enough for now
-		log.Fatalf("Could not get token from master %s", pm.SSHConfig.Host)
-	}
-	secret := corev1.Secret{}
-	token := []byte(values[4])
-	cahash := []byte(values[6])
-	secret.Data = map[string][]byte{}
-	secret.Data["token"] = token
-	secret.Data["cahash"] = cahash
-	bytes, err := client.ReadFile("/etc/kubernetes/admin.conf")
-	if err != nil {
-		log.Fatalf("Failed to get kubeconfig with err %v", err)
-	}
-	return &secret, bytes
-}
-
 func init() {
 	createCmd.AddCommand(machineCmdCreate)
-	machineCmdCreate.Flags().String("ip", "10.0.0.1", "IP of the machine")
-	machineCmdCreate.Flags().Int("port", 22, "SSH port")
-	machineCmdCreate.Flags().String("role", "node", "Role of the machine. Can be master/node")
+	machineCmdCreate.Flags().String("ip", "", "IP of the machine")
+	machineCmdCreate.Flags().Int("port", common.DefaultSSHPort, "SSH port")
+	machineCmdCreate.Flags().String("role", "", "Role of the machine. Can be master/node")
 	machineCmdCreate.Flags().String("publicKeys", "", "Comma separated list of public host keys for the machine")
 	machineCmdCreate.Flags().String("sshSecretName", "sshSecret", "Name of the sshSecret to use")
 	machineCmdCreate.Flags().String("iface", "eth0", "Interface that keepalived will bind to in case of master")
@@ -499,5 +563,6 @@ func init() {
 	machineCmdDelete.Flags().DurationVar(&drainTimeout, "drain-timeout", common.DRAIN_TIMEOUT, "The length of time to wait before giving up, zero means infinite")
 	machineCmdDelete.Flags().IntVar(&drainGracePeriodSeconds, "drain-graceperiod", common.DRAIN_GRACE_PERIOD_SECONDS, "Period of time in seconds given to each pod to terminate gracefully. If negative, the default value specified in the pod will be used.")
 
+	machineCmdGet.Flags().String("ip", "", "IP of the machine")
 	getCmd.AddCommand(machineCmdGet)
 }

@@ -8,18 +8,31 @@ const (
 	DRAIN_TIMEOUT              = 5 * time.Minute
 	DRAIN_GRACE_PERIOD_SECONDS = -1
 
+	MasterRole = "master"
+	NodeRole   = "node"
+
+	DefaultSSHPort                     = 22
+	DefaultNamespace                   = "default"
+	DefaultClusterName                 = "cctl-cluster"
+	DefaultSSHCredentialSecretName     = "ssh-credential"
+	DefaultCommonCASecretName          = "common-ca"
+	DefaultEtcdCASecretName            = "etcd-ca"
+	DefaultAPIServerCASecretName       = "apiserver-ca"
+	DefaultFrontProxyCASecretName      = "front-proxy-ca"
+	DefaultServiceAccountKeySecretName = "serviceaccount-key"
+	DefaultBootstrapTokenSecretName    = "bootstrap-token"
+
 	ClusterV1PrintTemplate = `Cluster Information
 ------- ------------
 Cluster Name       : {{ .Cluster.ObjectMeta.Name}}
 Creation Timestamp : {{ .Cluster.ObjectMeta.CreationTimestamp }}
-Kubernetes Version : {{ .K8sVersion }}
 
 Networking
 
 	Pod CIDR     : {{ .Cluster.Spec.ClusterNetwork.Pods.CIDRBlocks }}
 	Service CIDR : {{ .Cluster.Spec.ClusterNetwork.Services.CIDRBlocks }}
-	VIP          : {{ .VIPConfiguration.IP  }}
-	RouterID     : {{ .VIPConfiguration.RouterID }}
+	VIP          : {{ .ClusterProviderSpec.VIPConfiguration.IP  }}
+	RouterID     : {{ .ClusterProviderSpec.VIPConfiguration.RouterID }}
 `
 	MachineV1PrintTemplate = `Machine Information
 ------- -----------
