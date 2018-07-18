@@ -42,7 +42,7 @@ func ReadStateFile() (common.ClusterState, error) {
 func WriteStateFile(cs *common.ClusterState) error {
 	if cs != nil {
 		bytes, _ := yaml.Marshal(cs)
-		ioutil.WriteFile(STATE_FILE_PATH, bytes, 0600)
+		return ioutil.WriteFile(STATE_FILE_PATH, bytes, 0600)
 	}
 	return nil
 }
