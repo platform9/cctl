@@ -35,8 +35,8 @@ func ReadStateFile() (common.ClusterState, error) {
 	if err != nil {
 		return *cs, err
 	}
-	yaml.Unmarshal(d, cs)
-	return *cs, nil
+	err = yaml.Unmarshal(d, cs)
+	return *cs, err
 }
 
 func WriteStateFile(cs *common.ClusterState) error {
