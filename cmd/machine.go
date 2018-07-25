@@ -55,10 +55,13 @@ var machineCmdCreate = &cobra.Command{
 		if err != nil {
 			log.Fatalf("Invalid port %v", err)
 		}
-		publicKeyFiles := cmd.Flag("publicKeys").Value.String()
+		publicKeyFiles, err := cmd.Flags().GetStringSlice("publicKeys")
+		if err != nil {
+			log.Fatalf("Unable to parse `publicKeys`: %v", err)
+		}
 
 		var publicKeys []string
-		for _, file := range strings.Split(publicKeyFiles, ",") {
+		for _, file := range publicKeyFiles {
 			publicKey, err := sshutil.PublicKeyFromFile(file)
 			if err != nil {
 				log.Fatalf("Unable to parse SSH public key from %q: %v", file, err)
@@ -553,7 +556,7 @@ func init() {
 	machineCmdCreate.Flags().String("ip", "", "IP of the machine")
 	machineCmdCreate.Flags().Int("port", common.DefaultSSHPort, "SSH port")
 	machineCmdCreate.Flags().String("role", "", "Role of the machine. Can be master/node")
-	machineCmdCreate.Flags().String("publicKeys", "", "Comma separated list of public host keys for the machine")
+	machineCmdCreate.Flags().StringSlice("publicKeys", []string{}, "The machine's SSH public keys. Provide a comma-separated list, or define multiple flags.")
 	machineCmdCreate.Flags().String("sshSecretName", "sshSecret", "Name of the sshSecret to use")
 	machineCmdCreate.Flags().String("iface", "eth0", "Interface that keepalived will bind to in case of master")
 
