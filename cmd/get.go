@@ -11,10 +11,10 @@ var outputFmt string
 // getCmd represents the get command
 var getCmd = &cobra.Command{
 	Use:   "get",
-	Short: "Used to get resources",
+	Short: "Display one or more resources",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		log.Printf("Unknown object %q to get. Use --help to print available options", args[0])
+		log.Printf("Unknown resource %q. Use --help to print available options", args[0])
 	},
 }
 

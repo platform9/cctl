@@ -2,12 +2,19 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"os"
 
+	cctlstate "github.com/platform9/cctl/pkg/state"
+
+	spclientfake "github.com/platform9/ssh-provider/pkg/client/clientset_generated/clientset/fake"
 	"github.com/spf13/cobra"
+	kubeclientfake "k8s.io/client-go/kubernetes/fake"
+	clusterclientfake "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/fake"
 )
 
-var cfgFile string
+var stateFilename string
+var state *cctlstate.State
 
 var rootCmd = &cobra.Command{
 	Use: "cctl",
@@ -24,11 +31,17 @@ func Execute() {
 }
 
 func init() {
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.cli.yaml)")
+	cobra.OnInitialize(initState)
+	rootCmd.PersistentFlags().StringVar(&stateFilename, "state", "/etc/cctl-state.yaml", "state file")
+}
 
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+func initState() {
+	kubeClient := kubeclientfake.NewSimpleClientset()
+	clusterClient := clusterclientfake.NewSimpleClientset()
+	spClient := spclientfake.NewSimpleClientset()
+	state = cctlstate.NewWithFile(stateFilename, kubeClient, clusterClient, spClient)
+
+	if err := state.PushToAPIs(); err != nil {
+		log.Fatalf("Unable to sync on-disk state: %v", err)
+	}
 }

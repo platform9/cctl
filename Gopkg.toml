@@ -29,13 +29,8 @@
   version = "0.0.3"
 
 [[constraint]]
-  branch = "master"
-  name = "golang.org/x/crypto"
-
-[[constraint]]
   name = "sigs.k8s.io/cluster-api"
-  source = "github.com/dlipovetsky/cluster-api"
-  branch = "providerstatus"
+  branch = "master"
 
 [prune]
   go-tests = true
@@ -48,3 +43,7 @@
 [[constraint]]
   name = "github.com/platform9/ssh-provider"
   branch = "master"
+
+[[constraint]]
+  branch = "master"
+  name = "golang.org/x/crypto"

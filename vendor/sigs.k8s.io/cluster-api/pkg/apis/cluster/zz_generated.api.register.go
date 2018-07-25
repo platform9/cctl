@@ -118,78 +118,11 @@ func Resource(resource string) schema.GroupResource {
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-type MachineDeployment struct {
-	metav1.TypeMeta
-	metav1.ObjectMeta
-	Spec   MachineDeploymentSpec
-	Status MachineDeploymentStatus
-}
-
-// +genclient
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 type Machine struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
 	Spec   MachineSpec
 	Status MachineStatus
-}
-
-type MachineDeploymentStatus struct {
-	ObservedGeneration  int64
-	Replicas            int32
-	UpdatedReplicas     int32
-	ReadyReplicas       int32
-	AvailableReplicas   int32
-	UnavailableReplicas int32
-}
-
-type MachineStatus struct {
-	NodeRef        *corev1.ObjectReference
-	LastUpdated    metav1.Time
-	Versions       *MachineVersionInfo
-	ErrorReason    *clustercommon.MachineStatusError
-	ErrorMessage   *string
-	ProviderStatus ProviderStatus
-	Addresses      []corev1.NodeAddress
-}
-
-type MachineSpec struct {
-	metav1.ObjectMeta
-	Taints         []corev1.Taint
-	ProviderConfig ProviderConfig
-	Roles          []clustercommon.MachineRole
-	Versions       MachineVersionInfo
-	ConfigSource   *corev1.NodeConfigSource
-}
-
-type ProviderStatus struct {
-	Value *pkgruntime.RawExtension
-}
-
-type MachineVersionInfo struct {
-	Kubelet      string
-	ControlPlane string
-}
-
-type ProviderConfig struct {
-	Value     *pkgruntime.RawExtension
-	ValueFrom *ProviderConfigSource
-}
-
-type ProviderConfigSource struct {
-}
-
-type MachineDeploymentSpec struct {
-	Replicas                *int32
-	Selector                metav1.LabelSelector
-	Template                MachineTemplateSpec
-	Strategy                MachineDeploymentStrategy
-	MinReadySeconds         *int32
-	RevisionHistoryLimit    *int32
-	Paused                  bool
-	ProgressDeadlineSeconds *int32
 }
 
 // +genclient
@@ -203,21 +136,26 @@ type Cluster struct {
 	Status ClusterStatus
 }
 
-type MachineDeploymentStrategy struct {
-	Type          clustercommon.MachineDeploymentStrategyType
-	RollingUpdate *MachineRollingUpdateDeployment
+type MachineStatus struct {
+	NodeRef        *corev1.ObjectReference
+	LastUpdated    metav1.Time
+	Versions       *MachineVersionInfo
+	ErrorReason    *clustercommon.MachineStatusError
+	ErrorMessage   *string
+	ProviderStatus *pkgruntime.RawExtension
+	Addresses      []corev1.NodeAddress
 }
 
 type ClusterStatus struct {
 	APIEndpoints   []APIEndpoint
 	ErrorReason    clustercommon.ClusterStatusError
 	ErrorMessage   string
-	ProviderStatus ProviderStatus
+	ProviderStatus *pkgruntime.RawExtension
 }
 
-type MachineRollingUpdateDeployment struct {
-	MaxUnavailable *utilintstr.IntOrString
-	MaxSurge       *utilintstr.IntOrString
+type MachineVersionInfo struct {
+	Kubelet      string
+	ControlPlane string
 }
 
 type APIEndpoint struct {
@@ -230,9 +168,21 @@ type ClusterSpec struct {
 	ProviderConfig ProviderConfig
 }
 
-type MachineTemplateSpec struct {
+type MachineSpec struct {
 	metav1.ObjectMeta
-	Spec MachineSpec
+	Taints         []corev1.Taint
+	ProviderConfig ProviderConfig
+	Roles          []clustercommon.MachineRole
+	Versions       MachineVersionInfo
+	ConfigSource   *corev1.NodeConfigSource
+}
+
+type ProviderConfig struct {
+	Value     *pkgruntime.RawExtension
+	ValueFrom *ProviderConfigSource
+}
+
+type ProviderConfigSource struct {
 }
 
 type ClusterNetworkingConfig struct {
@@ -271,6 +221,52 @@ type MachineSetSpec struct {
 	MinReadySeconds int32
 	Selector        metav1.LabelSelector
 	Template        MachineTemplateSpec
+}
+
+type MachineTemplateSpec struct {
+	metav1.ObjectMeta
+	Spec MachineSpec
+}
+
+// +genclient
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type MachineDeployment struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+	Spec   MachineDeploymentSpec
+	Status MachineDeploymentStatus
+}
+
+type MachineDeploymentStatus struct {
+	ObservedGeneration  int64
+	Replicas            int32
+	UpdatedReplicas     int32
+	ReadyReplicas       int32
+	AvailableReplicas   int32
+	UnavailableReplicas int32
+}
+
+type MachineDeploymentSpec struct {
+	Replicas                *int32
+	Selector                metav1.LabelSelector
+	Template                MachineTemplateSpec
+	Strategy                MachineDeploymentStrategy
+	MinReadySeconds         *int32
+	RevisionHistoryLimit    *int32
+	Paused                  bool
+	ProgressDeadlineSeconds *int32
+}
+
+type MachineDeploymentStrategy struct {
+	Type          clustercommon.MachineDeploymentStrategyType
+	RollingUpdate *MachineRollingUpdateDeployment
+}
+
+type MachineRollingUpdateDeployment struct {
+	MaxUnavailable *utilintstr.IntOrString
+	MaxSurge       *utilintstr.IntOrString
 }
 
 //

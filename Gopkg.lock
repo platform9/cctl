@@ -232,7 +232,10 @@
 
 [[projects]]
   name = "github.com/kubernetes-incubator/apiserver-builder"
-  packages = ["pkg/builders"]
+  packages = [
+    "pkg/builders",
+    "pkg/controller"
+  ]
   revision = "14201e804a58a140011a0044b15331f477535f91"
   version = "v1.9-alpha.4"
 
@@ -298,18 +301,35 @@
   name = "github.com/pkg/sftp"
   packages = ["."]
   revision = "57673e38ea946592a59c26592b7e6fbda646975b"
-  version = "1.8.0"
+  version = "v1.8.0"
 
 [[projects]]
   branch = "master"
   name = "github.com/platform9/ssh-provider"
   packages = [
-    "machine",
-    "provisionedmachine",
-    "sshproviderconfig",
-    "sshproviderconfig/v1alpha1"
+    "pkg/api",
+    "pkg/apis/sshprovider",
+    "pkg/apis/sshprovider/install",
+    "pkg/apis/sshprovider/v1alpha1",
+    "pkg/client/clientset_generated/clientset",
+    "pkg/client/clientset_generated/clientset/fake",
+    "pkg/client/clientset_generated/clientset/scheme",
+    "pkg/client/clientset_generated/clientset/typed/sshprovider/v1alpha1",
+    "pkg/client/clientset_generated/clientset/typed/sshprovider/v1alpha1/fake",
+    "pkg/client/informers_generated/externalversions",
+    "pkg/client/informers_generated/externalversions/internalinterfaces",
+    "pkg/client/informers_generated/externalversions/sshprovider",
+    "pkg/client/informers_generated/externalversions/sshprovider/v1alpha1",
+    "pkg/client/listers_generated/sshprovider/v1alpha1",
+    "pkg/clusterapi/machine",
+    "pkg/controller",
+    "pkg/controller/provisionedmachine",
+    "pkg/controller/sharedinformers",
+    "pkg/machine",
+    "pkg/nodeadm",
+    "pkg/util/sets"
   ]
-  revision = "cb86de4cc08be34465f2f19c35a8b095668a3d6f"
+  revision = "dcfaadf139e3e2c5d10f1ff08ee54bd7f70cc05c"
 
 [[projects]]
   name = "github.com/prometheus/client_golang"
@@ -660,6 +680,7 @@
   name = "k8s.io/client-go"
   packages = [
     "discovery",
+    "discovery/fake",
     "informers",
     "informers/admissionregistration",
     "informers/admissionregistration/v1alpha1",
@@ -701,35 +722,64 @@
     "informers/storage/v1alpha1",
     "informers/storage/v1beta1",
     "kubernetes",
+    "kubernetes/fake",
     "kubernetes/scheme",
     "kubernetes/typed/admissionregistration/v1alpha1",
+    "kubernetes/typed/admissionregistration/v1alpha1/fake",
     "kubernetes/typed/admissionregistration/v1beta1",
+    "kubernetes/typed/admissionregistration/v1beta1/fake",
     "kubernetes/typed/apps/v1",
+    "kubernetes/typed/apps/v1/fake",
     "kubernetes/typed/apps/v1beta1",
+    "kubernetes/typed/apps/v1beta1/fake",
     "kubernetes/typed/apps/v1beta2",
+    "kubernetes/typed/apps/v1beta2/fake",
     "kubernetes/typed/authentication/v1",
+    "kubernetes/typed/authentication/v1/fake",
     "kubernetes/typed/authentication/v1beta1",
+    "kubernetes/typed/authentication/v1beta1/fake",
     "kubernetes/typed/authorization/v1",
+    "kubernetes/typed/authorization/v1/fake",
     "kubernetes/typed/authorization/v1beta1",
+    "kubernetes/typed/authorization/v1beta1/fake",
     "kubernetes/typed/autoscaling/v1",
+    "kubernetes/typed/autoscaling/v1/fake",
     "kubernetes/typed/autoscaling/v2beta1",
+    "kubernetes/typed/autoscaling/v2beta1/fake",
     "kubernetes/typed/batch/v1",
+    "kubernetes/typed/batch/v1/fake",
     "kubernetes/typed/batch/v1beta1",
+    "kubernetes/typed/batch/v1beta1/fake",
     "kubernetes/typed/batch/v2alpha1",
+    "kubernetes/typed/batch/v2alpha1/fake",
     "kubernetes/typed/certificates/v1beta1",
+    "kubernetes/typed/certificates/v1beta1/fake",
     "kubernetes/typed/core/v1",
+    "kubernetes/typed/core/v1/fake",
     "kubernetes/typed/events/v1beta1",
+    "kubernetes/typed/events/v1beta1/fake",
     "kubernetes/typed/extensions/v1beta1",
+    "kubernetes/typed/extensions/v1beta1/fake",
     "kubernetes/typed/networking/v1",
+    "kubernetes/typed/networking/v1/fake",
     "kubernetes/typed/policy/v1beta1",
+    "kubernetes/typed/policy/v1beta1/fake",
     "kubernetes/typed/rbac/v1",
+    "kubernetes/typed/rbac/v1/fake",
     "kubernetes/typed/rbac/v1alpha1",
+    "kubernetes/typed/rbac/v1alpha1/fake",
     "kubernetes/typed/rbac/v1beta1",
+    "kubernetes/typed/rbac/v1beta1/fake",
     "kubernetes/typed/scheduling/v1alpha1",
+    "kubernetes/typed/scheduling/v1alpha1/fake",
     "kubernetes/typed/settings/v1alpha1",
+    "kubernetes/typed/settings/v1alpha1/fake",
     "kubernetes/typed/storage/v1",
+    "kubernetes/typed/storage/v1/fake",
     "kubernetes/typed/storage/v1alpha1",
+    "kubernetes/typed/storage/v1alpha1/fake",
     "kubernetes/typed/storage/v1beta1",
+    "kubernetes/typed/storage/v1beta1/fake",
     "listers/admissionregistration/v1alpha1",
     "listers/admissionregistration/v1beta1",
     "listers/apps/v1",
@@ -757,6 +807,7 @@
     "pkg/version",
     "rest",
     "rest/watch",
+    "testing",
     "tools/auth",
     "tools/cache",
     "tools/clientcmd",
@@ -771,7 +822,8 @@
     "util/cert",
     "util/flowcontrol",
     "util/homedir",
-    "util/integer"
+    "util/integer",
+    "util/workqueue"
   ]
   revision = "1692bdde78a61f6316cfb6988015bd460067b238"
 
@@ -788,41 +840,26 @@
   revision = "bf40560368791a7dddfeea9b3cfcf89b34139f44"
 
 [[projects]]
-  branch = "release-1.9"
-  name = "k8s.io/kubernetes"
-  packages = [
-    "pkg/apis/core",
-    "pkg/apis/core/helper",
-    "pkg/apis/core/v1/helper",
-    "pkg/apis/core/v1/helper/qos",
-    "pkg/kubelet/apis/kubeletconfig",
-    "pkg/kubelet/apis/kubeletconfig/v1alpha1",
-    "pkg/kubelet/qos",
-    "pkg/kubelet/types",
-    "pkg/master/ports",
-    "pkg/proxy/apis/kubeproxyconfig",
-    "pkg/proxy/apis/kubeproxyconfig/v1alpha1",
-    "pkg/util/pointer"
-  ]
-  revision = "57729ea3d9a1b75f3fc7bbbadc597ba707d47c8a"
-
-[[projects]]
-  branch = "providerstatus"
+  branch = "master"
   name = "sigs.k8s.io/cluster-api"
   packages = [
+    "pkg/apis",
     "pkg/apis/cluster",
     "pkg/apis/cluster/common",
+    "pkg/apis/cluster/install",
     "pkg/apis/cluster/v1alpha1",
+    "pkg/client/clientset_generated/clientset",
+    "pkg/client/clientset_generated/clientset/fake",
     "pkg/client/clientset_generated/clientset/scheme",
     "pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1",
+    "pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1/fake",
     "pkg/util"
   ]
-  revision = "aeaac272fdadea993518f0616b38b167f269b9cb"
-  source = "github.com/dlipovetsky/cluster-api"
+  revision = "babe91030553781cdf12192a2875f90dac5b5a00"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "d42863014c935e0200bbd57db62b99b0eea82ab37bacef21155dea685c192606"
+  inputs-digest = "f933eb045e9ac8d281ab6dc6137819d4520dc6cda71a040efb66686ea58d0224"
   solver-name = "gps-cdcl"
   solver-version = 1
