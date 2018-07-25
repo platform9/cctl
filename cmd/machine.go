@@ -273,7 +273,7 @@ var machineCmdDelete = &cobra.Command{
 			log.Fatalf("Unable to get cluster: %v", err)
 		}
 
-		deleteMustNotOprhanNodes(targetMachine)
+		deleteMustNotOrphanNodes(targetMachine)
 
 		if err := drainAndDeleteNodeForMachine(targetMachine, targetProvisionedMachine); err != nil {
 			log.Fatalf("Unable to drain and delete cluster node for machine %q: %v", targetMachine.Name, err)
@@ -335,7 +335,7 @@ var machineCmdDelete = &cobra.Command{
 	},
 }
 
-func deleteMustNotOprhanNodes(targetMachine *clusterv1.Machine) {
+func deleteMustNotOrphanNodes(targetMachine *clusterv1.Machine) {
 	if clusterutil.RoleContains(clustercommon.MasterRole, targetMachine.Spec.Roles) {
 		machineList, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).List(metav1.ListOptions{})
 		if err != nil {
