@@ -58,7 +58,7 @@ var machineCmdCreate = &cobra.Command{
 		publicKeyFiles := cmd.Flag("publicKeys").Value.String()
 
 		var publicKeys []string
-		for _, file := range strings.Fields(publicKeyFiles) {
+		for _, file := range strings.Split(publicKeyFiles, ",") {
 			publicKey, err := sshutil.PublicKeyFromFile(file)
 			if err != nil {
 				log.Fatalf("Unable to parse SSH public key from %q: %v", file, err)
