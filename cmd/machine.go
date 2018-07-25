@@ -438,7 +438,25 @@ func adminKubeconfigFromMachine(machine *clusterv1.Machine, provisionedMachine *
 	if err != nil {
 		return nil, fmt.Errorf("unable to create machine client for machine %q: %v", machine.Name, err)
 	}
-	return machineClient.ReadFile("/etc/kubernetes/admin.conf")
+	// chmod file for read access for all users
+	stdOut, stdErr, err := machineClient.RunCommand("chmod 0644 /etc/kubernetes/admin.conf")
+	if err != nil {
+		fmt.Println(stdOut)
+		fmt.Println(stdErr)
+		return nil, fmt.Errorf("unable to change kubeconfig file permissions on %q: %v", machine.Name, err)
+	}
+	fileContents, err := machineClient.ReadFile("/etc/kubernetes/admin.conf")
+	if err != nil {
+		return nil, fmt.Errorf("unable to read kubeconfig from machine %q:%v", machine.Name, err)
+	}
+	// chmod file to keep it secure
+	stdOut, stdErr, err = machineClient.RunCommand("chmod 0600 /etc/kubernetes/admin.conf")
+	if err != nil {
+		fmt.Println(stdOut)
+		fmt.Println(stdErr)
+		return nil, fmt.Errorf("unable to change kubeconfig file permissions on %q: %v", machine.Name, err)
+	}
+	return fileContents, nil
 }
 
 func writeAdminKubeconfigToMachine(kubeconfig []byte, machine *clusterv1.Machine, provisionedMachine *spv1.ProvisionedMachine) error {
@@ -446,7 +464,12 @@ func writeAdminKubeconfigToMachine(kubeconfig []byte, machine *clusterv1.Machine
 	if err != nil {
 		return fmt.Errorf("unable to create machine client for machine %q: %v", machine.Name, err)
 	}
-	return machineClient.WriteFile("/etc/kubernetes/admin.conf", 0600, kubeconfig)
+	// write kubeconfig to /tmp first and then move to /etc
+	if err := machineClient.WriteFile("/tmp/admin.conf", 0600, kubeconfig); err != nil {
+		return fmt.Errorf("unable to write kubeconfig to machine %q: %v", machine.Name, err)
+	}
+	// move kubeconfig from /tmp to /etc/kubernetes
+	return machineClient.MoveFile("/tmp/admin.conf", "/etc/kubernetes/admin.conf")
 }
 
 func drainAndDeleteNodeForMachine(targetMachine *clusterv1.Machine, targetProvisionedMachine *spv1.ProvisionedMachine) error {
