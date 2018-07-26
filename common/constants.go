@@ -22,6 +22,11 @@ const (
 	DefaultServiceAccountKeySecretName = "serviceaccount-key"
 	DefaultBootstrapTokenSecretName    = "bootstrap-token"
 
+	SystemUUIDFile    = "/sys/class/dmi/id/product_uuid"
+	KubectlFile       = "/opt/bin/kubectl"
+	AdminKubeconfig   = "/etc/kubernetes/admin.conf"
+	KubeletKubeconfig = "/etc/kubernetes/kubelet.conf"
+
 	ClusterV1PrintTemplate = `Cluster Information
 ------- ------------
 Cluster Name       : {{ .Cluster.ObjectMeta.Name}}

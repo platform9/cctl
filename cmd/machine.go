@@ -473,34 +473,57 @@ func writeAdminKubeconfigToMachine(kubeconfig []byte, machine *clusterv1.Machine
 }
 
 func drainAndDeleteNodeForMachine(targetMachine *clusterv1.Machine, targetProvisionedMachine *spv1.ProvisionedMachine) error {
+	var stdOut, stdErr []byte
+	var cmd string
+	var err error
+
 	targetMachineClient, err := sshMachineClientFromSSHConfig(targetProvisionedMachine.Spec.SSHConfig)
 	if err != nil {
 		return fmt.Errorf("unable to create machine client for machine %q: %v", targetMachine.Name, err)
 	}
 
-	// TODO(dlipovetsky) Handle /opt/bin/kubectl not found. Possibly infer
-	// that the nodeadm reset ran at least as far as removing the kubectl
+	cmd = fmt.Sprintf("cat %s", common.SystemUUIDFile)
+	stdOut, stdErr, err = targetMachineClient.RunCommand(cmd)
+	if err != nil {
+		return fmt.Errorf("unable to read the system UUID from %q: %v (%s) (%s)", common.SystemUUIDFile, err, string(stdOut), string(stdErr))
+	}
+	systemUUID := strings.TrimSpace(string(stdOut))
+
+	// TODO(dlipovetsky) Handle the case when kubectl is not found. Possibly
+	// infer that the nodeadm reset ran at least as far as removing the kubectl
 	// binary. nodeName includes the object kind, i.e.,
 
-	// "node/the-name-of-the-node"
-	stdOut, stdErr, err := targetMachineClient.RunCommand("/opt/bin/kubectl --kubeconfig=/etc/kubernetes/admin.conf get node --selector kubernetes.io/hostname=$(hostname -f) -oname")
+	// Requires sudo because the kubelet kubeconfig is readable by only by root.
+	cmd = fmt.Sprintf(`%s --kubeconfig=%s get nodes -ojsonpath='{.items[?(@.status.nodeInfo.systemUUID=="%s")].metadata.name}'`, common.KubectlFile, common.KubeletKubeconfig, systemUUID)
+	stdOut, stdErr, err = targetMachineClient.RunCommand(cmd)
 	if err != nil {
 		return fmt.Errorf("unable to identify the cluster node: %v (%s) (%s)", err, string(stdOut), string(stdErr))
 	}
 	nodeName := strings.TrimSpace(string(stdOut))
+
 	if len(nodeName) != 0 {
 		log.Printf("Draining cluster node %q for machine %q", nodeName, targetMachine.Name)
-		// --ignore-daemonsets is used because critical components (kube-proxy, overlay network) run as daemonsets
-		// --delete-local-data is NOT used; pods using emptyDir volumes must be removed by the user, since removing them causes the data to be lost
-		// --force is NOT used; unmanaged pods must be removed by the user, since they won't be rescheduled to another node
-		stdOut, stdErr, err = targetMachineClient.RunCommand(fmt.Sprintf("/opt/bin/kubectl --kubeconfig=/etc/kubernetes/admin.conf drain --timeout=%v --grace-period=%v --ignore-daemonsets %v", drainTimeout, drainGracePeriodSeconds, nodeName))
+		// Requires sudo because the admin kubeconfig is readable by only by
+		// root.
+		// Use the admin kubeconfig because admin permissions are required to
+		// drain.
+		// Use --ignore-daemonsets because any DaemonSet-managed Pods will
+		// prevent the drain otherwise, and because all Nodes have DaemonSet
+		// Pods (kube-proxy, overlay network).
+		// Do NOT use --delete-local-data. Pods using emptyDir volumes must be
+		// removed by the user, since removing them causes the data to be lost.
+		// Do NOT use --force. Unmanaged pods must be removed by the user, since
+		// they won't be rescheduled to another node.
+		cmd = fmt.Sprintf("%s --kubeconfig=%s drain %s --timeout=%v --grace-period=%v --ignore-daemonsets", common.KubectlFile, common.AdminKubeconfig, nodeName, drainTimeout, drainGracePeriodSeconds)
+		stdOut, stdErr, err = targetMachineClient.RunCommand(cmd)
 		if err != nil {
 			return fmt.Errorf("unable to drain cluster node %q: %v (%s) (%s)", nodeName, err, string(stdOut), string(stdErr))
 		}
 		log.Println(string(stdOut))
 
 		log.Printf("Deleting cluster node %q for machine %q", nodeName, targetMachine.Name)
-		stdOut, stdErr, err = targetMachineClient.RunCommand(fmt.Sprintf("/opt/bin/kubectl --kubeconfig=/etc/kubernetes/admin.conf delete %v", nodeName))
+		// Requires sudo because the kubelet kubeconfig is readable by only by root.
+		stdOut, stdErr, err = targetMachineClient.RunCommand(fmt.Sprintf("%s --kubeconfig=%s delete node %s", common.KubectlFile, common.KubeletKubeconfig, nodeName))
 		if err != nil {
 			return fmt.Errorf("unable to delete cluster node %q: %v (%s) (%s)", nodeName, err, string(stdOut), string(stdErr))
 		}
