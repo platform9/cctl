@@ -92,7 +92,6 @@ func writeSecretToMachine(machineClient machine.Client, secret *corev1.Secret, c
 	if !ok {
 		return fmt.Errorf("did not find key %q in secret %q", keyKey, secret.Name)
 	}
-
 	// TODO(dlipovetsky) Use same dir for cert and key
 	certDir := filepath.Dir(certPath)
 	if err := machineClient.MkdirAll(certDir, 7644); err != nil {
@@ -103,12 +102,19 @@ func writeSecretToMachine(machineClient machine.Client, secret *corev1.Secret, c
 		return fmt.Errorf("unable to create key dir %q on machine: %v", keyDir, err)
 	}
 
-	if err := machineClient.WriteFile(certPath, 0644, cert); err != nil {
-		return fmt.Errorf("unable to write cert to %q on machine: %v", certPath, err)
+	// Non root users will not have permission to write to /etc/ directly
+	// Write cert and key to /tmp instead and then move the certs over to their respective paths
+	tmpCertPath := fmt.Sprintf("/tmp/%s", certKey)
+	tmpKeyPath := fmt.Sprintf("/tmp/%s", keyKey)
+	if err := machineClient.WriteFile(tmpCertPath, 0644, cert); err != nil {
+		return fmt.Errorf("unable to write cert to %q on machine: %v", tmpCertPath, err)
 	}
-	if err := machineClient.WriteFile(keyPath, 0600, key); err != nil {
-		return fmt.Errorf("unable to write key to %q on machine: %v", keyPath, err)
+	if err := machineClient.WriteFile(tmpKeyPath, 0600, key); err != nil {
+		return fmt.Errorf("unable to write key to %q on machine: %v", tmpKeyPath, err)
 	}
-
-	return nil
+	// Copy cert and key from /tmp to its respective destination
+	if err := machineClient.MoveFile(tmpCertPath, certPath); err != nil {
+		return err
+	}
+	return machineClient.MoveFile(tmpKeyPath, keyPath)
 }

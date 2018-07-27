@@ -131,8 +131,12 @@ func deployKubernetesMaster(cluster *clusterv1.Cluster, machine *clusterv1.Machi
 	if err != nil {
 		return fmt.Errorf("error marshalling nodeadm init configuration to YAML: %v", err)
 	}
-	if err := machineClient.WriteFile(NodeadmConfigPath, 0600, initConfigBytes); err != nil {
+	tmpNodeadmConfigPath := "/tmp/nodeadm.yaml"
+	if err := machineClient.WriteFile(tmpNodeadmConfigPath, 0644, initConfigBytes); err != nil {
 		return fmt.Errorf("error writing nodeadm init configuration to %q: %v", NodeadmConfigPath, err)
+	}
+	if err := machineClient.MoveFile(tmpNodeadmConfigPath, NodeadmConfigPath); err != nil {
+		return fmt.Errorf("error moving file from %q to %q:%v", tmpNodeadmConfigPath, NodeadmConfigPath, err)
 	}
 	cmd := fmt.Sprintf("%s init --cfg %s", NodeadmPath, NodeadmConfigPath)
 	stdOut, stdErr, err := machineClient.RunCommand(cmd)

@@ -50,8 +50,12 @@ func deployKubernetesNode(cluster *clusterv1.Cluster, machine *clusterv1.Machine
 	if err != nil {
 		return fmt.Errorf("error marshalling nodeadm join configuration to YAML: %v", err)
 	}
-	if err := machineClient.WriteFile(NodeadmConfigPath, 0600, joinConfigBytes); err != nil {
+	tmpNodeadmConfigPath := "/tmp/nodeadm.yaml"
+	if err := machineClient.WriteFile(tmpNodeadmConfigPath, 0644, joinConfigBytes); err != nil {
 		return fmt.Errorf("error writing nodeadm join configuration to %q: %v", NodeadmConfigPath, err)
+	}
+	if err := machineClient.MoveFile(tmpNodeadmConfigPath, NodeadmConfigPath); err != nil {
+		return fmt.Errorf("error moving file from %q to %q:%v", tmpNodeadmConfigPath, NodeadmConfigPath, err)
 	}
 	cmd := fmt.Sprintf("%s join --cfg %s --master %v:%v --token %s --cahash %s",
 		NodeadmPath,
