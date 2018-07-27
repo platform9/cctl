@@ -482,10 +482,11 @@ func drainAndDeleteNodeForMachine(targetMachine *clusterv1.Machine, targetProvis
 		return fmt.Errorf("unable to create machine client for machine %q: %v", targetMachine.Name, err)
 	}
 
+	log.Printf("Reading system UUID of machine %q", targetMachine.Name)
 	cmd = fmt.Sprintf("cat %s", common.SystemUUIDFile)
 	stdOut, stdErr, err = targetMachineClient.RunCommand(cmd)
 	if err != nil {
-		return fmt.Errorf("unable to read the system UUID from %q: %v (%s) (%s)", common.SystemUUIDFile, err, string(stdOut), string(stdErr))
+		return fmt.Errorf("error running %q: %v (%s) (%s)", cmd, err, string(stdOut), string(stdErr))
 	}
 	systemUUID := strings.TrimSpace(string(stdOut))
 
@@ -493,11 +494,12 @@ func drainAndDeleteNodeForMachine(targetMachine *clusterv1.Machine, targetProvis
 	// infer that the nodeadm reset ran at least as far as removing the kubectl
 	// binary. nodeName includes the object kind, i.e.,
 
+	log.Printf("Identifying node for machine %q", targetMachine.Name)
 	// Requires sudo because the kubelet kubeconfig is readable by only by root.
 	cmd = fmt.Sprintf(`%s --kubeconfig=%s get nodes -ojsonpath='{.items[?(@.status.nodeInfo.systemUUID=="%s")].metadata.name}'`, common.KubectlFile, common.KubeletKubeconfig, systemUUID)
 	stdOut, stdErr, err = targetMachineClient.RunCommand(cmd)
 	if err != nil {
-		return fmt.Errorf("unable to identify the cluster node: %v (%s) (%s)", err, string(stdOut), string(stdErr))
+		return fmt.Errorf("error running %q: %v (%s) (%s)", cmd, err, string(stdOut), string(stdErr))
 	}
 	nodeName := strings.TrimSpace(string(stdOut))
 
@@ -517,15 +519,16 @@ func drainAndDeleteNodeForMachine(targetMachine *clusterv1.Machine, targetProvis
 		cmd = fmt.Sprintf("%s --kubeconfig=%s drain %s --timeout=%v --grace-period=%v --ignore-daemonsets", common.KubectlFile, common.AdminKubeconfig, nodeName, drainTimeout, drainGracePeriodSeconds)
 		stdOut, stdErr, err = targetMachineClient.RunCommand(cmd)
 		if err != nil {
-			return fmt.Errorf("unable to drain cluster node %q: %v (%s) (%s)", nodeName, err, string(stdOut), string(stdErr))
+			return fmt.Errorf("error running %q: %v (%s) (%s)", cmd, err, string(stdOut), string(stdErr))
 		}
 		log.Println(string(stdOut))
 
 		log.Printf("Deleting cluster node %q for machine %q", nodeName, targetMachine.Name)
-		// Requires sudo because the kubelet kubeconfig is readable by only by root.
+		// Requires sudo because the kubelet kubeconfig is readable by only by
+		// root.
 		stdOut, stdErr, err = targetMachineClient.RunCommand(fmt.Sprintf("%s --kubeconfig=%s delete node %s", common.KubectlFile, common.KubeletKubeconfig, nodeName))
 		if err != nil {
-			return fmt.Errorf("unable to delete cluster node %q: %v (%s) (%s)", nodeName, err, string(stdOut), string(stdErr))
+			return fmt.Errorf("error running %q: %v (%s) (%s)", cmd, err, string(stdOut), string(stdErr))
 		}
 		log.Println(string(stdOut))
 	}
