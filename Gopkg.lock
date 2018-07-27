@@ -329,7 +329,7 @@
     "pkg/nodeadm",
     "pkg/util/sets"
   ]
-  revision = "dcfaadf139e3e2c5d10f1ff08ee54bd7f70cc05c"
+  revision = "05a207726d56dc2b16db73d3d4f47254bf19a052"
 
 [[projects]]
   name = "github.com/prometheus/client_golang"

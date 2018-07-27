@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net"
 	"os"
 
@@ -18,12 +19,17 @@ type Client interface {
 	WriteFile(path string, mode os.FileMode, b []byte) error
 	ReadFile(path string) ([]byte, error)
 	MkdirAll(path string, mode os.FileMode) error
+	MoveFile(srcFilePath, dstFilePath string) error
 }
 
 type client struct {
 	sshClient  *ssh.Client
 	sftpClient *sftp.Client
 }
+
+const (
+	runAsSudo = true
+)
 
 // NewClient creates a new Client that can be used to perform action on a
 // machine
@@ -76,6 +82,10 @@ func (c *client) RunCommand(cmd string) ([]byte, []byte, error) {
 	stdErrPipe, err := session.StderrPipe()
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to pipe stderr: %s", err)
+	}
+	// Prepend sudo if runAsSudo set to true
+	if runAsSudo {
+		cmd = fmt.Sprintf("sudo %s", cmd)
 	}
 	err = session.Start(cmd)
 	if err != nil {
@@ -133,11 +143,20 @@ func (c *client) ReadFile(path string) ([]byte, error) {
 // MkdirAll creates a directory named path, along with any necessary parents,
 // and returns nil, or else returns an error.
 func (c *client) MkdirAll(path string, mode os.FileMode) error {
-	if err := c.sftpClient.MkdirAll(path); err != nil {
+	cmd := fmt.Sprintf("mkdir -p %s", path)
+	stdOut, stdErr, err := c.RunCommand(cmd)
+	if err != nil {
+		log.Println(stdOut)
+		log.Println(stdErr)
 		return fmt.Errorf("unable to create directory %q: %s", path, err)
 	}
-	if err := c.sftpClient.Chmod(path, mode); err != nil {
-		return fmt.Errorf("unable to change mode of directory %q to %v: %s", path, mode, err)
+	// Change file permissions recursively
+	cmd = fmt.Sprintf("chmod %d %s", mode, path)
+	stdOut, stdErr, err = c.RunCommand(cmd)
+	if err != nil {
+		log.Println(stdOut)
+		log.Println(stdErr)
+		return fmt.Errorf("unable to set permissions to directory %q: %s", path, err)
 	}
 	return nil
 }
@@ -159,4 +178,17 @@ func FixedHostKeys(keys []ssh.PublicKey) ssh.HostKeyCallback {
 		}
 		return fmt.Errorf("host key does not match any expected keys")
 	}
+}
+
+// MoveFile moves file specifed by srcFilePath to dstFilePath,
+// and returns nil, or else returns an error.
+func (c *client) MoveFile(srcFilePath, dstFilePath string) error {
+	cmd := fmt.Sprintf("mv -f %s %s", srcFilePath, dstFilePath)
+	stdOut, stdErr, err := c.RunCommand(cmd)
+	if err != nil {
+		log.Println(stdOut)
+		log.Println(stdErr)
+		return fmt.Errorf("unable to move file from %q to %q: %s", srcFilePath, dstFilePath, err)
+	}
+	return nil
 }
