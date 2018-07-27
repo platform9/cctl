@@ -32,9 +32,11 @@ func (a *Actuator) createMaster(cluster *clusterv1.Cluster, machine *clusterv1.M
 }
 
 func (a *Actuator) deleteMaster(machine *clusterv1.Machine, machineClient machine.Client) error {
+	log.Println("resetting kubernetes on node")
 	if err := resetKubernetes(machineClient); err != nil {
 		return fmt.Errorf("unable to reset kubernetes: %v", err)
 	}
+	log.Println("resetting etcd on node")
 	if err := resetEtcd(machineClient); err != nil {
 		return fmt.Errorf("unable to reset etcd: %v", err)
 	}
@@ -90,6 +92,7 @@ func deployEtcd(cluster *clusterv1.Cluster, machine *clusterv1.Machine, machineC
 		etcdEndpoint := etcdMember.ClientURLs[0]
 		cmd = fmt.Sprintf("%s join %s", EtcdadmPath, etcdEndpoint)
 	}
+	log.Printf("running %q command. This might take some time..", cmd)
 	stdOut, stdErr, err := machineClient.RunCommand(cmd)
 	if err != nil {
 		log.Println(string(stdOut))
@@ -131,6 +134,7 @@ func deployKubernetesMaster(cluster *clusterv1.Cluster, machine *clusterv1.Machi
 	if err != nil {
 		return fmt.Errorf("error marshalling nodeadm init configuration to YAML: %v", err)
 	}
+	log.Println("writing nodeadm configuration file")
 	tmpNodeadmConfigPath := "/tmp/nodeadm.yaml"
 	if err := machineClient.WriteFile(tmpNodeadmConfigPath, 0644, initConfigBytes); err != nil {
 		return fmt.Errorf("error writing nodeadm init configuration to %q: %v", NodeadmConfigPath, err)
@@ -138,6 +142,7 @@ func deployKubernetesMaster(cluster *clusterv1.Cluster, machine *clusterv1.Machi
 	if err := machineClient.MoveFile(tmpNodeadmConfigPath, NodeadmConfigPath); err != nil {
 		return fmt.Errorf("error moving file from %q to %q:%v", tmpNodeadmConfigPath, NodeadmConfigPath, err)
 	}
+	log.Println("deploying kubernetes. this might take a few minutes..")
 	cmd := fmt.Sprintf("%s init --cfg %s", NodeadmPath, NodeadmConfigPath)
 	stdOut, stdErr, err := machineClient.RunCommand(cmd)
 	if err != nil {

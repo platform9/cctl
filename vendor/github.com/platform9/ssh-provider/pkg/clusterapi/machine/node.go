@@ -50,6 +50,7 @@ func deployKubernetesNode(cluster *clusterv1.Cluster, machine *clusterv1.Machine
 	if err != nil {
 		return fmt.Errorf("error marshalling nodeadm join configuration to YAML: %v", err)
 	}
+	log.Println("writing nodeadm configuration")
 	tmpNodeadmConfigPath := "/tmp/nodeadm.yaml"
 	if err := machineClient.WriteFile(tmpNodeadmConfigPath, 0644, joinConfigBytes); err != nil {
 		return fmt.Errorf("error writing nodeadm join configuration to %q: %v", NodeadmConfigPath, err)
@@ -64,6 +65,7 @@ func deployKubernetesNode(cluster *clusterv1.Cluster, machine *clusterv1.Machine
 		apiEndpoint.Port,
 		bootstrapToken,
 		caHash)
+	log.Println("deploying kubernetes. this might take a few minutes..")
 	stdOut, stdErr, err := machineClient.RunCommand(cmd)
 	if err != nil {
 		log.Println(string(stdOut))
@@ -75,6 +77,7 @@ func deployKubernetesNode(cluster *clusterv1.Cluster, machine *clusterv1.Machine
 }
 
 func (a *Actuator) deleteNode(machine *clusterv1.Machine, machineClient machine.Client) error {
+	log.Println("resetting kubernetes on node")
 	if err := resetKubernetes(machineClient); err != nil {
 		return fmt.Errorf("unable to reset kubernetes: %v", err)
 	}

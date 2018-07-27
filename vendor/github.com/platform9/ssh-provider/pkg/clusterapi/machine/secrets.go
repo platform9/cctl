@@ -2,6 +2,7 @@ package machine
 
 import (
 	"fmt"
+	"log"
 	"path/filepath"
 
 	"github.com/platform9/ssh-provider/pkg/controller"
@@ -78,6 +79,7 @@ func (a *Actuator) writeMasterSecretsToMachine(cluster *clusterv1.Cluster, machi
 			if err := writeSecretToMachine(machineClient, secret, clusterSecretConstants.CertKey, clusterSecretConstants.KeyKey, clusterSecretConstants.CertPath, clusterSecretConstants.KeyPath); err != nil {
 				return fmt.Errorf("unable to write secret %q to machine: %v", secret.Name, err)
 			}
+			log.Printf("[secrets] wrote secret %q and key %q", clusterSecretConstants.CertPath, clusterSecretConstants.KeyPath)
 		}
 	}
 	return nil
