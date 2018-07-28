@@ -840,6 +840,12 @@
   revision = "bf40560368791a7dddfeea9b3cfcf89b34139f44"
 
 [[projects]]
+  name = "k8s.io/kubernetes"
+  packages = ["pkg/version"]
+  revision = "b1b29978270dc22fecc592ac55d903350454310a"
+  version = "v1.11.1"
+
+[[projects]]
   branch = "master"
   name = "sigs.k8s.io/cluster-api"
   packages = [
@@ -860,6 +866,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "f933eb045e9ac8d281ab6dc6137819d4520dc6cda71a040efb66686ea58d0224"
+  inputs-digest = "8f8c73e45a9e2e321f233744b0db28e6a0e8e81b91e5ae2d3ec6839683a127ae"
   solver-name = "gps-cdcl"
   solver-version = 1

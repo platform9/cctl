@@ -19,6 +19,8 @@ BIN := cctl
 REPO := cctl
 PACKAGE_GOPATH := /go/src/github.com/platform9/$(REPO)
 DEP_TEST=$(shell which dep)
+LDFLAGS := $(shell source ./version.sh ; KUBE_ROOT=. ; kube::version::ldflags)
+GIT_STORAGE_MOUNT := $(shell source ./git_utils.sh; container_git_storage_mount) 
 
 ifeq ($(DEP_TEST),)
 	DEP_BIN := $(CWD)/bin/dep
@@ -31,7 +33,7 @@ endif
 default: $(BIN)
 
 container-build:
-	docker run --rm -v $(PWD):$(PACKAGE_GOPATH) -w $(PACKAGE_GOPATH) golang:1.10 make
+	docker run --rm -v $(PWD):$(PACKAGE_GOPATH) $(GIT_STORAGE_MOUNT) -w $(PACKAGE_GOPATH) golang:1.10 make
 
 $(DEP_BIN):
 ifeq ($(DEP_BIN),$(CWD)/bin/dep)
@@ -46,7 +48,7 @@ ensure: $(DEP_BIN)
 	$(DEP_BIN) ensure -v
 
 $(BIN):
-	go build -o $(BIN)
+	go build -o $(BIN) -ldflags "$(LDFLAGS)"
 
 format:
 	gofmt -w -s *.go
