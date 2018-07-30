@@ -69,7 +69,6 @@ func InitConfigurationForMachine(cluster clusterv1.Cluster, machine clusterv1.Ma
 	// MasterConfiguration
 	if cpc.VIPConfiguration != nil {
 		cfg.MasterConfiguration.API.AdvertiseAddress = cpc.VIPConfiguration.IP
-		cfg.MasterConfiguration.APIServerCertSANs = append(cfg.MasterConfiguration.APIServerCertSANs, cpc.VIPConfiguration.IP)
 	} // else: kubeadm will set defaults
 	cfg.MasterConfiguration.KubernetesVersion = machine.Spec.Versions.ControlPlane
 	cfg.MasterConfiguration.Etcd.Endpoints = []string{"https://127.0.0.1:2379"}
