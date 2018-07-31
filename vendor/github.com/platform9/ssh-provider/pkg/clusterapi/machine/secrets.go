@@ -96,11 +96,11 @@ func writeSecretToMachine(machineClient machine.Client, secret *corev1.Secret, c
 	}
 	// TODO(dlipovetsky) Use same dir for cert and key
 	certDir := filepath.Dir(certPath)
-	if err := machineClient.MkdirAll(certDir, 7644); err != nil {
+	if err := machineClient.MkdirAll(certDir, 0755); err != nil {
 		return fmt.Errorf("unable to create cert dir %q on machine: %v", certDir, err)
 	}
 	keyDir := filepath.Dir(keyPath)
-	if err := machineClient.MkdirAll(keyDir, 7644); err != nil {
+	if err := machineClient.MkdirAll(keyDir, 0755); err != nil {
 		return fmt.Errorf("unable to create key dir %q on machine: %v", keyDir, err)
 	}
 
