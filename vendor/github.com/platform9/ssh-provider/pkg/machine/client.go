@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net"
 	"os"
+	"strconv"
 
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
@@ -144,18 +144,15 @@ func (c *client) ReadFile(path string) ([]byte, error) {
 // and returns nil, or else returns an error.
 func (c *client) MkdirAll(path string, mode os.FileMode) error {
 	cmd := fmt.Sprintf("mkdir -p %s", path)
-	stdOut, stdErr, err := c.RunCommand(cmd)
+	_, _, err := c.RunCommand(cmd)
 	if err != nil {
-		log.Println(stdOut)
-		log.Println(stdErr)
 		return fmt.Errorf("unable to create directory %q: %s", path, err)
 	}
-	// Change file permissions recursively
-	cmd = fmt.Sprintf("chmod %d %s", mode, path)
-	stdOut, stdErr, err = c.RunCommand(cmd)
+	// Change directory permission. Note that mode needs to be
+	// converted to bit (octet) representation for chmod consumption
+	cmd = fmt.Sprintf("chmod %s %s", strconv.FormatUint(uint64(mode), 8), path)
+	_, _, err = c.RunCommand(cmd)
 	if err != nil {
-		log.Println(stdOut)
-		log.Println(stdErr)
 		return fmt.Errorf("unable to set permissions to directory %q: %s", path, err)
 	}
 	return nil
@@ -184,10 +181,8 @@ func FixedHostKeys(keys []ssh.PublicKey) ssh.HostKeyCallback {
 // and returns nil, or else returns an error.
 func (c *client) MoveFile(srcFilePath, dstFilePath string) error {
 	cmd := fmt.Sprintf("mv -f %s %s", srcFilePath, dstFilePath)
-	stdOut, stdErr, err := c.RunCommand(cmd)
+	_, _, err := c.RunCommand(cmd)
 	if err != nil {
-		log.Println(stdOut)
-		log.Println(stdErr)
 		return fmt.Errorf("unable to move file from %q to %q: %s", srcFilePath, dstFilePath, err)
 	}
 	return nil
