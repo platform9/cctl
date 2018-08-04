@@ -232,6 +232,15 @@ func newProvisionedMachineAndMachine(name string, role clustercommon.MachineRole
 		Roles: []spv1.MachineRole{
 			spv1.MachineRole(role),
 		},
+		ComponentVersions: &spv1.MachineComponentVersions{
+			NodeadmVersion:    common.DefaultNodeadmVersion,
+			EtcdadmVersion:    common.DefaultEtcdadmVersion,
+			KubernetesVersion: common.DefaultKubernetesVersion,
+			CNIVersion:        common.DefaultCNIVersion,
+			KeepalivedVersion: common.DefaultKeepalivedVersion,
+			FlannelVersion:    common.DefaultFlannelVersion,
+			EtcdVersion:       common.DefaultEtcdVersion,
+		},
 	}
 	if err := sputil.PutMachineSpec(machineProviderSpec, &newMachine); err != nil {
 		return nil, nil, fmt.Errorf("unable to encode machine provider spec: %v", err)
