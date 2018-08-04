@@ -105,7 +105,7 @@ func createCluster(clusterName, podsCIDR, servicesCIDR, vip string, routerID int
 			APIEndpoints: []clusterv1.APIEndpoint{
 				clusterv1.APIEndpoint{
 					Host: vip,
-					Port: common.DEFAULT_APISERVER_PORT,
+					Port: common.DefaultApiserverPort,
 				},
 			},
 		},
