@@ -91,6 +91,17 @@ type ClusterStatus struct {
 	EtcdMembers []EtcdMember `json:"etcdMembers,omitempty"`
 }
 
+// MachineComponentVersions
+type MachineComponentVersions struct {
+	NodeadmVersion    string `json:"nodeadmVersion,omitempty"`
+	EtcdadmVersion    string `json:"etcdadmVersion,omitempty"`
+	KubernetesVersion string `json:"kubernetesVersion,omitempty"`
+	CNIVersion        string `json:"cniVersion,omitempty"`
+	FlannelVersion    string `json:"flannelVersion,omitempty"`
+	KeepalivedVersion string `json:"keepalivedVersion,omitempty"`
+	EtcdVersion       string `json:"etcdVersion,omitempty"`
+}
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // MachineSpec
@@ -103,6 +114,8 @@ type MachineSpec struct {
 	// ProvisionedMachineName is the binding reference to the Provisioned
 	// Machine backing this Machine.
 	ProvisionedMachineName string `json:"provisionedMachineName,omitempty"`
+	// ComponentVersions enumerates versions of all the components
+	ComponentVersions *MachineComponentVersions `json:"componentVersions,omitempty"`
 }
 
 // The MachineRole indicates the purpose of the Machine, and will determine
