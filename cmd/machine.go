@@ -267,6 +267,10 @@ var machineCmdDelete = &cobra.Command{
 	Short: "Deletes a machine from the cluster",
 	Run: func(cmd *cobra.Command, args []string) {
 		ip := cmd.Flag("ip").Value.String()
+		force, err := cmd.Flags().GetBool("force")
+		if err != nil {
+			log.Fatalf("Unable to parse `force` flag: %v", err)
+		}
 
 		targetMachine, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).Get(ip, metav1.GetOptions{})
 		if err != nil {
@@ -285,28 +289,31 @@ var machineCmdDelete = &cobra.Command{
 			log.Fatalf("Unable to get cluster: %v", err)
 		}
 
-		deleteMustNotOrphanNodes(targetMachine)
+		if force {
+			log.Println("--force enabled: skipping node drain, node delete, and commands invoked on the machine")
+		} else {
+			deleteMustNotOrphanNodes(targetMachine)
+			if err := drainAndDeleteNodeForMachine(targetMachine, targetProvisionedMachine); err != nil {
+				log.Fatalf("Unable to drain and delete cluster node for machine %q: %v", targetMachine.Name, err)
+			}
 
-		if err := drainAndDeleteNodeForMachine(targetMachine, targetProvisionedMachine); err != nil {
-			log.Fatalf("Unable to drain and delete cluster node for machine %q: %v", targetMachine.Name, err)
-		}
-
-		var insecureIgnoreHostKey bool = false
-		if len(targetProvisionedMachine.Spec.SSHConfig.PublicKeys) == 0 {
-			insecureIgnoreHostKey = true
-			log.Printf("Not able to verify machine SSH identity: No public keys given. Continuing...")
-		}
-		machineClientBuilder := sshmachine.NewClient
-		actuator := machineActuator.NewActuator(
-			state.KubeClient,
-			state.ClusterClient,
-			state.SPClient,
-			machineClientBuilder,
-			insecureIgnoreHostKey,
-		)
-		log.Println("Deleting machine")
-		if err = actuator.Delete(cluster, targetMachine); err != nil {
-			log.Fatalf("Unable to delete machine: %v", err)
+			var insecureIgnoreHostKey bool
+			if len(targetProvisionedMachine.Spec.SSHConfig.PublicKeys) == 0 {
+				insecureIgnoreHostKey = true
+				log.Printf("Not able to verify machine SSH identity: No public keys given. Continuing...")
+			}
+			machineClientBuilder := sshmachine.NewClient
+			actuator := machineActuator.NewActuator(
+				state.KubeClient,
+				state.ClusterClient,
+				state.SPClient,
+				machineClientBuilder,
+				insecureIgnoreHostKey,
+			)
+			log.Println("Deleting machine")
+			if err = actuator.Delete(cluster, targetMachine); err != nil {
+				log.Fatalf("Unable to delete machine: %v", err)
+			}
 		}
 
 		log.Println("Updating cluster status")
@@ -620,7 +627,7 @@ func init() {
 
 	deleteCmd.AddCommand(machineCmdDelete)
 	machineCmdDelete.Flags().String("ip", "", "IP of the machine")
-	machineCmdDelete.Flags().String("force", "", "Force delete the machine")
+	machineCmdDelete.Flags().Bool("force", false, "Force delete the machine")
 	machineCmdDelete.Flags().DurationVar(&drainTimeout, "drain-timeout", common.DrainTimeout, "The length of time to wait before giving up, zero means infinite")
 	machineCmdDelete.Flags().IntVar(&drainGracePeriodSeconds, "drain-graceperiod", common.DrainGracePeriodSeconds, "Period of time in seconds given to each pod to terminate gracefully. If negative, the default value specified in the pod will be used.")
 
