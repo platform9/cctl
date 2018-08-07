@@ -103,7 +103,7 @@ func createCluster(clusterName, podsCIDR, servicesCIDR, vip string, routerID int
 		},
 		Status: clusterv1.ClusterStatus{
 			APIEndpoints: []clusterv1.APIEndpoint{
-				clusterv1.APIEndpoint{
+				{
 					Host: vip,
 					Port: common.DefaultApiserverPort,
 				},
