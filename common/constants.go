@@ -3,14 +3,11 @@ package common
 import "time"
 
 const (
-	K8S_VERSION                = "1.10.4"
-	DEFAULT_APISERVER_PORT     = 6443
-	DRAIN_TIMEOUT              = 5 * time.Minute
-	DRAIN_GRACE_PERIOD_SECONDS = -1
-
-	MasterRole = "master"
-	NodeRole   = "node"
-
+	DefaultApiserverPort               = 6443
+	DrainTimeout                       = 5 * time.Minute
+	DrainGracePeriodSeconds            = -1
+	MasterRole                         = "master"
+	NodeRole                           = "node"
 	DefaultSSHPort                     = 22
 	DefaultNamespace                   = "default"
 	DefaultClusterName                 = "cctl-cluster"
@@ -21,13 +18,18 @@ const (
 	DefaultFrontProxyCASecretName      = "front-proxy-ca"
 	DefaultServiceAccountKeySecretName = "serviceaccount-key"
 	DefaultBootstrapTokenSecretName    = "bootstrap-token"
-
-	SystemUUIDFile    = "/sys/class/dmi/id/product_uuid"
-	KubectlFile       = "/opt/bin/kubectl"
-	AdminKubeconfig   = "/etc/kubernetes/admin.conf"
-	KubeletKubeconfig = "/etc/kubernetes/kubelet.conf"
-
-	ClusterV1PrintTemplate = `Cluster Information
+	SystemUUIDFile                     = "/sys/class/dmi/id/product_uuid"
+	KubectlFile                        = "/opt/bin/kubectl"
+	AdminKubeconfig                    = "/etc/kubernetes/admin.conf"
+	KubeletKubeconfig                  = "/etc/kubernetes/kubelet.conf"
+	DefaultNodeadmVersion              = "v0.0.1-alpha"
+	DefaultEtcdadmVersion              = "v0.0.1-alpha"
+	DefaultKubernetesVersion           = "1.10.4"
+	DefaultCNIVersion                  = "v0.6.0"
+	DefaultFlannelVersion              = "v0.10.0"
+	DefaultKeepalivedVersion           = "v2.0.4"
+	DefaultEtcdVersion                 = "v3.3.8"
+	ClusterV1PrintTemplate             = `Cluster Information
 ------- ------------
 Cluster Name       : {{ .Cluster.ObjectMeta.Name}}
 Creation Timestamp : {{ .Cluster.ObjectMeta.CreationTimestamp }}

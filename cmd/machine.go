@@ -232,6 +232,15 @@ func newProvisionedMachineAndMachine(name string, role clustercommon.MachineRole
 		Roles: []spv1.MachineRole{
 			spv1.MachineRole(role),
 		},
+		ComponentVersions: &spv1.MachineComponentVersions{
+			NodeadmVersion:    common.DefaultNodeadmVersion,
+			EtcdadmVersion:    common.DefaultEtcdadmVersion,
+			KubernetesVersion: common.DefaultKubernetesVersion,
+			CNIVersion:        common.DefaultCNIVersion,
+			KeepalivedVersion: common.DefaultKeepalivedVersion,
+			FlannelVersion:    common.DefaultFlannelVersion,
+			EtcdVersion:       common.DefaultEtcdVersion,
+		},
 	}
 	if err := sputil.PutMachineSpec(machineProviderSpec, &newMachine); err != nil {
 		return nil, nil, fmt.Errorf("unable to encode machine provider spec: %v", err)
@@ -612,8 +621,8 @@ func init() {
 	deleteCmd.AddCommand(machineCmdDelete)
 	machineCmdDelete.Flags().String("ip", "", "IP of the machine")
 	machineCmdDelete.Flags().String("force", "", "Force delete the machine")
-	machineCmdDelete.Flags().DurationVar(&drainTimeout, "drain-timeout", common.DRAIN_TIMEOUT, "The length of time to wait before giving up, zero means infinite")
-	machineCmdDelete.Flags().IntVar(&drainGracePeriodSeconds, "drain-graceperiod", common.DRAIN_GRACE_PERIOD_SECONDS, "Period of time in seconds given to each pod to terminate gracefully. If negative, the default value specified in the pod will be used.")
+	machineCmdDelete.Flags().DurationVar(&drainTimeout, "drain-timeout", common.DrainTimeout, "The length of time to wait before giving up, zero means infinite")
+	machineCmdDelete.Flags().IntVar(&drainGracePeriodSeconds, "drain-graceperiod", common.DrainGracePeriodSeconds, "Period of time in seconds given to each pod to terminate gracefully. If negative, the default value specified in the pod will be used.")
 
 	machineCmdGet.Flags().String("ip", "", "IP of the machine")
 	getCmd.AddCommand(machineCmdGet)
