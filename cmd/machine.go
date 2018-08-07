@@ -271,6 +271,10 @@ var machineCmdDelete = &cobra.Command{
 		if err != nil {
 			log.Fatalf("Unable to parse `force` flag: %v", err)
 		}
+		skipDrainDelete, err := cmd.Flags().GetBool("skip-drain-delete")
+		if err != nil {
+			log.Fatalf("Unable to parse `skip-drain-delete` flag: %v", err)
+		}
 
 		targetMachine, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).Get(ip, metav1.GetOptions{})
 		if err != nil {
@@ -293,8 +297,10 @@ var machineCmdDelete = &cobra.Command{
 			log.Println("--force enabled: skipping node drain, node delete, and commands invoked on the machine")
 		} else {
 			deleteMustNotOrphanNodes(targetMachine)
-			if err := drainAndDeleteNodeForMachine(targetMachine, targetProvisionedMachine); err != nil {
-				log.Fatalf("Unable to drain and delete cluster node for machine %q: %v", targetMachine.Name, err)
+			if !skipDrainDelete {
+				if err := drainAndDeleteNodeForMachine(targetMachine, targetProvisionedMachine); err != nil {
+					log.Fatalf("Unable to drain and delete cluster node for machine %q: %v", targetMachine.Name, err)
+				}
 			}
 
 			var insecureIgnoreHostKey bool
@@ -628,6 +634,7 @@ func init() {
 	deleteCmd.AddCommand(machineCmdDelete)
 	machineCmdDelete.Flags().String("ip", "", "IP of the machine")
 	machineCmdDelete.Flags().Bool("force", false, "Force delete the machine")
+	machineCmdDelete.Flags().Bool("skip-drain-delete", false, "Do not drain and delete the cluster node for the machine")
 	machineCmdDelete.Flags().DurationVar(&drainTimeout, "drain-timeout", common.DrainTimeout, "The length of time to wait before giving up, zero means infinite")
 	machineCmdDelete.Flags().IntVar(&drainGracePeriodSeconds, "drain-graceperiod", common.DrainGracePeriodSeconds, "Period of time in seconds given to each pod to terminate gracefully. If negative, the default value specified in the pod will be used.")
 
