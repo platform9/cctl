@@ -657,61 +657,71 @@ func compareComponents(old *spv1.MachineComponentVersions, cur *spv1.MachineComp
 	}
 }
 
+func upgradeMachine(ip string) {
+	fmt.Printf("Upgrading machine %s\n", ip)
+
+	oldMachine, err := state.ClusterClient.ClusterV1alpha1().
+		Machines(common.DefaultNamespace).
+		Get(ip, metav1.GetOptions{})
+	if err != nil {
+		log.Fatalf("Unable to get machine %q: %v\n", ip, err)
+	}
+	oldMachineSpec, err := sputil.GetMachineSpec(*oldMachine)
+	if err != nil {
+		log.Fatalf("Unable to get machine spec: %q: %v\n", oldMachine, err)
+	}
+
+	oldProvisionedMachine, err := state.SPClient.SshproviderV1alpha1().
+		ProvisionedMachines(common.DefaultNamespace).
+		Get(oldMachineSpec.ProvisionedMachineName, metav1.GetOptions{})
+
+	currentComponentVersions := getCurrentComponentVersions()
+
+	if cmp.Equal(oldMachineSpec.ComponentVersions, currentComponentVersions) {
+		fmt.Printf("Machine is update to date\n")
+		return
+	}
+
+	update := compareComponents(oldMachineSpec.ComponentVersions, currentComponentVersions)
+
+	// If any of the components except for nodeadm were updated, trigger an upgrade
+	if update.EtcdadmVersion || update.KubernetesVersion || update.CNIVersion || update.FlannelVersion ||
+		update.KeepalivedVersion || update.EtcdVersion {
+		// delete machine
+		deleteMachine(ip, false, false)
+		role := string(oldMachineSpec.Roles[0])
+		// and create a new one with the same specs as the old one
+		createMachine(ip, oldProvisionedMachine.Spec.SSHConfig.Port, oldProvisionedMachine.Spec.VIPNetworkInterface,
+			role, oldProvisionedMachine.Spec.SSHConfig.PublicKeys)
+		return
+	}
+
+	// A nodeadm/etcdadm version change does not require an actuator call, just a state file update
+	if update.NodeadmVersion || update.EtcdadmVersion {
+		oldMachineSpec.ComponentVersions.NodeadmVersion = currentComponentVersions.NodeadmVersion
+		oldMachineSpec.ComponentVersions.EtcdadmVersion = currentComponentVersions.EtcdadmVersion
+		fmt.Printf("Nodeadm/Etcdadm only change, updating state file...\n")
+
+		if err := sputil.PutMachineSpec(*oldMachineSpec, oldMachine); err != nil {
+			log.Fatalf("unable to encode machine provider spec: %v", err)
+		}
+		if _, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).
+			Update(oldMachine); err != nil {
+			log.Fatalf("Unable to update machine: %v", err)
+		}
+		if err := state.PullFromAPIs(); err != nil {
+			log.Fatalf("Unable to sync on-disk state: %v", err)
+		}
+		return
+	}
+}
+
 var machineCmdUpgrade = &cobra.Command{
 	Use:   "machine",
 	Short: "Upgrade machine",
 	Run: func(cmd *cobra.Command, args []string) {
 		ip := cmd.Flag("ip").Value.String()
-		fmt.Printf("Upgrading machine %s\n", ip)
-
-		oldMachine, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).Get(ip, metav1.GetOptions{})
-		if err != nil {
-			log.Fatalf("Unable to get machine %q: %v\n", ip, err)
-		}
-		oldMachineSpec, err := sputil.GetMachineSpec(*oldMachine)
-		if err != nil {
-			log.Fatalf("Unable to get machine spec: %q: %v\n", oldMachine, err)
-		}
-
-		oldProvisionedMachine, err := state.SPClient.SshproviderV1alpha1().ProvisionedMachines(common.DefaultNamespace).Get(oldMachineSpec.ProvisionedMachineName, metav1.GetOptions{})
-
-		currentComponentVersions := getCurrentComponentVersions()
-
-		if cmp.Equal(oldMachineSpec.ComponentVersions, currentComponentVersions) {
-			fmt.Printf("Machine is update to date\n")
-			return
-		}
-
-		update := compareComponents(oldMachineSpec.ComponentVersions, currentComponentVersions)
-
-		// If any of the components except for nodeadm were updated, trigger an upgrade
-		if update.EtcdadmVersion || update.KubernetesVersion || update.CNIVersion || update.FlannelVersion ||
-			update.KeepalivedVersion || update.EtcdVersion {
-			// delete machine
-			deleteMachine(ip, false, false)
-			role := string(oldMachineSpec.Roles[0])
-			// and create a new one with the same specs as the old one
-			createMachine(ip, oldProvisionedMachine.Spec.SSHConfig.Port, oldProvisionedMachine.Spec.VIPNetworkInterface,
-				role, oldProvisionedMachine.Spec.SSHConfig.PublicKeys)
-			return
-		}
-
-		// A nodeadm version change does not require an actuator call, just a state file update
-		if update.NodeadmVersion {
-			oldMachineSpec.ComponentVersions.NodeadmVersion = currentComponentVersions.NodeadmVersion
-			fmt.Printf("Nodeadm only change, updating state file...\n")
-
-			if err := sputil.PutMachineSpec(*oldMachineSpec, oldMachine); err != nil {
-				log.Fatalf("unable to encode machine provider spec: %v", err)
-			}
-			if _, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).Update(oldMachine); err != nil {
-				log.Fatalf("Unable to update machine: %v", err)
-			}
-			if err := state.PullFromAPIs(); err != nil {
-				log.Fatalf("Unable to sync on-disk state: %v", err)
-			}
-			return
-		}
+		upgradeMachine(ip)
 	},
 }
 
