@@ -14,6 +14,12 @@ import (
 )
 
 func (a *Actuator) createNode(cluster *clusterv1.Cluster, machine *clusterv1.Machine, machineClient machine.Client) error {
+	machineSpec, err := controller.GetMachineSpec(*machine)
+	if err != nil {
+		return fmt.Errorf("unable to decode spec of machine %q: %v", machine.Name, err)
+	}
+	// Install correct version of nodeadm
+	installNodeadm(machineSpec.ComponentVersions.NodeadmVersion, machineClient)
 	clusterSpec, err := controller.GetClusterSpec(*cluster)
 	if err != nil {
 		return fmt.Errorf("unable to decode cluster spec: %v", err)
@@ -29,6 +35,12 @@ func (a *Actuator) createNode(cluster *clusterv1.Cluster, machine *clusterv1.Mac
 }
 
 func deployKubernetesNode(cluster *clusterv1.Cluster, machine *clusterv1.Machine, machineClient machine.Client, bootstrapTokenSecret *corev1.Secret) error {
+	machineSpec, err := controller.GetMachineSpec(*machine)
+	if err != nil {
+		return fmt.Errorf("unable to decode spec of machine %q: %v", machine.Name, err)
+	}
+	// Install correct version of nodeadm
+	installNodeadm(machineSpec.ComponentVersions.NodeadmVersion, machineClient)
 	if len(cluster.Status.APIEndpoints) == 0 {
 		return fmt.Errorf("no API endpoints found")
 	}

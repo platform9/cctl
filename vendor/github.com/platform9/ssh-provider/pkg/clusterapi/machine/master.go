@@ -16,6 +16,18 @@ import (
 )
 
 func (a *Actuator) createMaster(cluster *clusterv1.Cluster, machine *clusterv1.Machine, pm *spv1.ProvisionedMachine, machineClient machine.Client) error {
+	machineSpec, err := controller.GetMachineSpec(*machine)
+	if err != nil {
+		return fmt.Errorf("unable to decode spec of machine %q: %v", machine.Name, err)
+	}
+	// Install correct version of nodeadm
+	if err := installNodeadm(machineSpec.ComponentVersions.NodeadmVersion, machineClient); err != nil {
+		return fmt.Errorf("unable to install the correct version of nodeadm: %v", err)
+	}
+	// Install correct version of etcdadm
+	if err := installEtcdadm(machineSpec.ComponentVersions.EtcdadmVersion, machineClient); err != nil {
+		return fmt.Errorf("unable to install the correct version of etcdadm: %v", err)
+	}
 	// Write secrets
 	if err := a.writeMasterSecretsToMachine(cluster, machineClient); err != nil {
 		return fmt.Errorf("unable to write secrets to machine: %s", err)
@@ -33,6 +45,18 @@ func (a *Actuator) createMaster(cluster *clusterv1.Cluster, machine *clusterv1.M
 
 func (a *Actuator) deleteMaster(machine *clusterv1.Machine, machineClient machine.Client) error {
 	log.Println("resetting kubernetes on node")
+	machineSpec, err := controller.GetMachineSpec(*machine)
+	if err != nil {
+		return fmt.Errorf("unable to decode spec of machine %q: %v", machine.Name, err)
+	}
+	// Install correct version of nodeadm
+	if err := installNodeadm(machineSpec.ComponentVersions.NodeadmVersion, machineClient); err != nil {
+		return fmt.Errorf("unable to install the correct version of nodeadm: %v", err)
+	}
+	// Install correct version of etcdadm
+	if err := installEtcdadm(machineSpec.ComponentVersions.EtcdadmVersion, machineClient); err != nil {
+		return fmt.Errorf("unable to install the correct version of etcdadm: %v", err)
+	}
 	if err := resetKubernetes(machineClient); err != nil {
 		return fmt.Errorf("unable to reset kubernetes: %v", err)
 	}
