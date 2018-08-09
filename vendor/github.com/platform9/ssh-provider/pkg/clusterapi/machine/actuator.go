@@ -6,6 +6,9 @@ package machine
 
 import (
 	"fmt"
+	"log"
+	"path/filepath"
+	"strings"
 
 	"github.com/platform9/ssh-provider/pkg/controller"
 	"github.com/platform9/ssh-provider/pkg/machine"
@@ -23,6 +26,7 @@ const (
 	EtcdadmPath       = "/opt/bin/etcdadm"
 	NodeadmPath       = "/opt/bin/nodeadm"
 	NodeadmConfigPath = "/etc/nodeadm.yaml"
+	CachePath         = "/var/cache/ssh-provider"
 )
 
 type machineClientBuilder func(host string, port int, username string, privateKey string, publicKeys []string, insecureIgnoreHostKey bool) (machine.Client, error)
@@ -45,6 +49,62 @@ func NewActuator(kubeClient kubernetes.Interface, clusterClient clusterclient.In
 		spClient:             spClient,
 		machineClientBuilder: machineClientBuilder,
 	}
+}
+
+//trimCommitFromVersion removes commit from input version. Version could
+//include commit,if shas are different for last tag and last commit
+func trimCommitFromVersion(version string) (string, error) {
+	split := strings.Split(version, ".")
+	if len(split) < 3 {
+		return "", fmt.Errorf("unable to parse version of %s", version)
+	}
+	return fmt.Sprintf("%s.%s.%s", split[0], split[1], split[2]), nil
+}
+
+//installEtcdadm installs etcdadm on the machine
+func installEtcdadm(version string, machineClient machine.Client) error {
+	return installComponent(EtcdadmPath, version, "etcdadm", machineClient)
+}
+
+//installNodeadm installs nodeadm on the machine
+func installNodeadm(version string, machineClient machine.Client) error {
+	return installComponent(NodeadmPath, version, "nodeadm", machineClient)
+}
+
+func installComponent(componentInstallPath, expectedVersion, componentName string, machineClient machine.Client) error {
+	exists, err := machineClient.Exists(componentInstallPath)
+	if err != nil {
+		return fmt.Errorf("unable to check if %s already exists: %v", componentInstallPath, err)
+	}
+	if exists {
+		existingVersionBytes, _, err := machineClient.RunCommand(fmt.Sprintf("%s version --short", componentInstallPath))
+		if err != nil {
+			return fmt.Errorf("unable to check version of %s: %v", componentInstallPath, err)
+		}
+		existingVersion, err := trimCommitFromVersion(strings.TrimSpace(string(existingVersionBytes)))
+		if err != nil {
+			return fmt.Errorf("unable to get scrubbed version: %v", err)
+		}
+		log.Printf("Doing version check for %s existing version %s expected version %s", componentName, existingVersion, expectedVersion)
+		if existingVersion == expectedVersion {
+			log.Printf("Found expected version for %s", componentName)
+			return nil
+		}
+	}
+	log.Printf("Looking for expected version %s for %s in cache", expectedVersion, componentName)
+	componentCachePath := filepath.Join(CachePath, componentName, expectedVersion, componentName)
+	exists, err = machineClient.Exists(componentCachePath)
+	if err != nil {
+		return fmt.Errorf("unable to check if %s already exists: %v", componentCachePath, err)
+	}
+	if exists {
+		log.Printf("Installing %s binary from %s", componentName, componentCachePath)
+		machineClient.CopyFile(componentCachePath, componentInstallPath)
+		return nil
+	}
+	//TODO(puneet) Try download from a hosted location
+	return fmt.Errorf("unable to copy component binary from %s to %s, source exists %t", componentCachePath, componentInstallPath, exists)
+
 }
 
 func (a *Actuator) Create(cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {

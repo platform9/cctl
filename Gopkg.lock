@@ -315,7 +315,7 @@
   version = "v1.8.0"
 
 [[projects]]
-  branch = "private/add-component-version-info"
+  branch = "master"
   name = "github.com/platform9/ssh-provider"
   packages = [
     "pkg/api",
@@ -340,7 +340,7 @@
     "pkg/nodeadm",
     "pkg/util/sets"
   ]
-  revision = "a04fd75546aa7f1b72b12849a2cee0a906538e91"
+  revision = "e8abc62f3f2601ff1c31a3ee37c7fe570da937ce"
 
 [[projects]]
   name = "github.com/prometheus/client_golang"
@@ -877,6 +877,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "8c2bd8c89b015fc1ab0a9abd777c027e6623b531bc09e61ab3d0a1589deb4a25"
+  inputs-digest = "3f54d53e018f53d5524351a03b0c609ed967c24fc39a894f5e94c0303c9a7696"
   solver-name = "gps-cdcl"
   solver-version = 1
