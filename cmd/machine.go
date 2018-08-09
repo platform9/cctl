@@ -29,10 +29,10 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	clusterutil "sigs.k8s.io/cluster-api/pkg/util"
 
-	"github.com/google/go-cmp/cmp"
-	corev1 "k8s.io/api/core/v1"
+		corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/google/go-cmp/cmp"
 )
 
 var (
@@ -621,7 +621,7 @@ var machineCmdGet = &cobra.Command{
 	},
 }
 
-type ComponentUpdated struct {
+type UpgradeRequired struct {
 	NodeadmVersion    bool
 	EtcdadmVersion    bool
 	KubernetesVersion bool
@@ -631,9 +631,12 @@ type ComponentUpdated struct {
 	EtcdVersion       bool
 }
 
-// Returns a boolean struct of components which have been updated
-func compareComponents(old *spv1.MachineComponentVersions, cur *spv1.MachineComponentVersions) ComponentUpdated {
-	return ComponentUpdated{
+func isUpgradeRequired(old *spv1.MachineComponentVersions, cur *spv1.MachineComponentVersions) (bool, UpgradeRequired) {
+	if cmp.Equal(old, cur) {
+		return false, UpgradeRequired{}
+	}
+
+	return true, UpgradeRequired{
 		old.NodeadmVersion != cur.NodeadmVersion,
 		old.EtcdadmVersion != cur.EtcdadmVersion,
 		old.KubernetesVersion != cur.KubernetesVersion,
@@ -664,17 +667,17 @@ func upgradeMachine(ip string) {
 
 	currentComponentVersions := getCurrentComponentVersions()
 
-	if cmp.Equal(oldMachineSpec.ComponentVersions, currentComponentVersions) {
+	upgradeRequired, upgrade := isUpgradeRequired(oldMachineSpec.ComponentVersions, currentComponentVersions)
+
+	if !upgradeRequired {
 		fmt.Printf("Machine is update to date\n")
 		return
 	}
 
-	update := compareComponents(oldMachineSpec.ComponentVersions, currentComponentVersions)
-
 	// If any of the components except for nodeadm/etcdadm were updated, trigger an upgrade
-	if update.KubernetesVersion || update.CNIVersion || update.FlannelVersion ||
-		update.KeepalivedVersion ||
-		update.EtcdVersion {
+	if upgrade.KubernetesVersion || upgrade.CNIVersion || upgrade.FlannelVersion ||
+		upgrade.KeepalivedVersion ||
+		upgrade.EtcdVersion {
 		// delete machine
 		deleteMachine(ip)
 		role := string(oldMachineSpec.Roles[0])
@@ -685,7 +688,7 @@ func upgradeMachine(ip string) {
 	}
 
 	// A nodeadm/etcdadm version change does not require an actuator call, just a state file update
-	if update.NodeadmVersion || update.EtcdadmVersion  {
+	if upgrade.NodeadmVersion || upgrade.EtcdadmVersion  {
 		oldMachineSpec.ComponentVersions.NodeadmVersion = currentComponentVersions.NodeadmVersion
 		oldMachineSpec.ComponentVersions.EtcdadmVersion = currentComponentVersions.EtcdadmVersion
 		fmt.Printf("Nodeadm/Etcdadm only change, updating state file...\n")
