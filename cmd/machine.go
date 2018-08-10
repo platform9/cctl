@@ -705,7 +705,7 @@ func upgradeMachine(ip string) {
 	if upgrade.NodeadmVersion || upgrade.EtcdadmVersion {
 		oldMachineSpec.ComponentVersions.NodeadmVersion = currentComponentVersions.NodeadmVersion
 		oldMachineSpec.ComponentVersions.EtcdadmVersion = currentComponentVersions.EtcdadmVersion
-		fmt.Printf("Nodeadm/Etcdadm only change, updating state file...\n")
+		fmt.Println("Nodeadm/Etcdadm only change, updating state file")
 
 		if err := sputil.PutMachineSpec(*oldMachineSpec, oldMachine); err != nil {
 			log.Fatalf("unable to encode machine provider spec: %v", err)
