@@ -29,10 +29,11 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	clusterutil "sigs.k8s.io/cluster-api/pkg/util"
 
-		corev1 "k8s.io/api/core/v1"
+	"github.com/blang/semver"
+	"github.com/google/go-cmp/cmp"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"github.com/google/go-cmp/cmp"
 )
 
 var (
@@ -631,19 +632,31 @@ type UpgradeRequired struct {
 	EtcdVersion       bool
 }
 
+func isUpgradeable(old, cur string) bool {
+	oldVersion, err := semver.Make(old)
+	if err != nil {
+		log.Fatalf("Unable to make a semver object of %s: %s", old, err)
+	}
+	currenVersion, err := semver.Make(cur)
+	if err != nil {
+		log.Fatalf("Unable to make a semver object of %s: %s", cur, err)
+	}
+	return currenVersion.GT(oldVersion)
+}
+
 func isUpgradeRequired(old *spv1.MachineComponentVersions, cur *spv1.MachineComponentVersions) (bool, UpgradeRequired) {
 	if cmp.Equal(old, cur) {
 		return false, UpgradeRequired{}
 	}
 
 	return true, UpgradeRequired{
-		old.NodeadmVersion != cur.NodeadmVersion,
-		old.EtcdadmVersion != cur.EtcdadmVersion,
-		old.KubernetesVersion != cur.KubernetesVersion,
-		old.CNIVersion != cur.CNIVersion,
-		old.FlannelVersion != cur.FlannelVersion,
-		old.KeepalivedVersion != cur.KeepalivedVersion,
-		old.EtcdVersion != cur.EtcdVersion,
+		isUpgradeable(old.NodeadmVersion, cur.NodeadmVersion),
+		isUpgradeable(old.KubernetesVersion, cur.KubernetesVersion),
+		isUpgradeable(old.CNIVersion, cur.CNIVersion),
+		isUpgradeable(old.FlannelVersion, cur.FlannelVersion),
+		isUpgradeable(old.KeepalivedVersion, cur.KeepalivedVersion),
+		isUpgradeable(old.KeepalivedVersion, cur.KeepalivedVersion),
+		isUpgradeable(old.EtcdVersion, cur.EtcdVersion),
 	}
 }
 
@@ -682,13 +695,13 @@ func upgradeMachine(ip string) {
 		deleteMachine(ip)
 		role := string(oldMachineSpec.Roles[0])
 		// and create a new one with the same specs as the old one
-		createMachine(ip ,oldProvisionedMachine.Spec.SSHConfig.Port, oldProvisionedMachine.Spec.VIPNetworkInterface,
+		createMachine(ip, oldProvisionedMachine.Spec.SSHConfig.Port, oldProvisionedMachine.Spec.VIPNetworkInterface,
 			role, oldProvisionedMachine.Spec.SSHConfig.PublicKeys)
 		return
 	}
 
 	// A nodeadm/etcdadm version change does not require an actuator call, just a state file update
-	if upgrade.NodeadmVersion || upgrade.EtcdadmVersion  {
+	if upgrade.NodeadmVersion || upgrade.EtcdadmVersion {
 		oldMachineSpec.ComponentVersions.NodeadmVersion = currentComponentVersions.NodeadmVersion
 		oldMachineSpec.ComponentVersions.EtcdadmVersion = currentComponentVersions.EtcdadmVersion
 		fmt.Printf("Nodeadm/Etcdadm only change, updating state file...\n")
