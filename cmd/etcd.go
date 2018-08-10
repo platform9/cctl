@@ -7,18 +7,21 @@ import (
 	"log"
 	"path/filepath"
 
+	"github.com/spf13/cobra"
+
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clustercommon "sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 
-	"github.com/platform9/cctl/common"
 	spv1 "github.com/platform9/ssh-provider/pkg/apis/sshprovider/v1alpha1"
 	sputil "github.com/platform9/ssh-provider/pkg/controller"
 	sshmachine "github.com/platform9/ssh-provider/pkg/machine"
 	setsutil "github.com/platform9/ssh-provider/pkg/util/sets"
-	"github.com/spf13/cobra"
+
+	"github.com/platform9/cctl/common"
+	capiutil "github.com/platform9/cctl/pkg/util/clusterapi"
 )
 
 var recoverEtcdCmd = &cobra.Command{
@@ -49,18 +52,13 @@ var recoverEtcdCmd = &cobra.Command{
 			}
 		}
 
-		var masters []*clusterv1.Machine
 		machineList, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).List(metav1.ListOptions{})
 		if err != nil {
 			log.Fatalf("Unable to list machines: %v", err)
 		}
-		for _, machine := range machineList.Items {
-			for _, role := range machine.Spec.Roles {
-				if role == clustercommon.MasterRole {
-					log.Printf("[recover etcd] Found master %q", machine.Name)
-					masters = append(masters, machine.DeepCopy())
-				}
-			}
+		masters := capiutil.MachinesWithRole(machineList.Items, clustercommon.MasterRole)
+		for _, m := range masters {
+			log.Printf("[recover etcd] Found master %q", m.Name)
 		}
 
 		if err := recoverEtcd(localPath, remotePath, etcdCASecret, cluster, masters); err != nil {
@@ -75,17 +73,17 @@ var recoverEtcdCmd = &cobra.Command{
 	},
 }
 
-func recoverEtcd(localPath, remotePath string, etcdCASecret *corev1.Secret, cluster *clusterv1.Cluster, masters []*clusterv1.Machine) error {
+func recoverEtcd(localPath, remotePath string, etcdCASecret *corev1.Secret, cluster *clusterv1.Cluster, masters []clusterv1.Machine) error {
 	if len(masters) == 0 {
 		return nil
 	}
 
 	mastersWithClient := make([]struct {
-		Machine *clusterv1.Machine
+		Machine clusterv1.Machine
 		Client  sshmachine.Client
 	}, len(masters))
 	for i, master := range masters {
-		machineStatus, err := sputil.GetMachineStatus(*master)
+		machineStatus, err := sputil.GetMachineStatus(master)
 		if err != nil {
 			return fmt.Errorf("unable to decode machine %q spec: %v", master.Name, err)
 		}
@@ -104,7 +102,7 @@ func recoverEtcd(localPath, remotePath string, etcdCASecret *corev1.Secret, clus
 			return fmt.Errorf("unable to reset etcd on machine %q: %v", mwc.Machine.Name, err)
 		}
 
-		machineStatus, err := sputil.GetMachineStatus(*mwc.Machine)
+		machineStatus, err := sputil.GetMachineStatus(mwc.Machine)
 		if err != nil {
 			return fmt.Errorf("unable to decode machine status: %v", err)
 		}
@@ -136,7 +134,7 @@ func recoverEtcd(localPath, remotePath string, etcdCASecret *corev1.Secret, clus
 	if err != nil {
 		return fmt.Errorf("error reading etcd member data from machine %q: %v", firstMWC.Machine.Name, err)
 	}
-	if err := updateMachineEtcdMember(firstEtcdMember, firstMWC.Machine); err != nil {
+	if err := updateMachineEtcdMember(firstEtcdMember, &firstMWC.Machine); err != nil {
 		return fmt.Errorf("unable to update machine %q status with etcd member %q: %v", firstMWC.Machine.Name, firstEtcdMember, err)
 	}
 	if err := insertClusterEtcdMember(firstEtcdMember, cluster); err != nil {
@@ -157,7 +155,7 @@ func recoverEtcd(localPath, remotePath string, etcdCASecret *corev1.Secret, clus
 		if err != nil {
 			return fmt.Errorf("error reading etcd member data from machine %q: %v", mwc.Machine.Name, err)
 		}
-		if err := updateMachineEtcdMember(etcdMember, mwc.Machine); err != nil {
+		if err := updateMachineEtcdMember(etcdMember, &mwc.Machine); err != nil {
 			return fmt.Errorf("unable to update machine %q status with etcd member %q: %v", mwc.Machine.Name, etcdMember, err)
 		}
 		if err := insertClusterEtcdMember(etcdMember, cluster); err != nil {
