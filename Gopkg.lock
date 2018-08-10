@@ -32,12 +32,6 @@
   revision = "3a771d992973f24aa725d07868b467d1ddfceafb"
 
 [[projects]]
-  name = "github.com/blang/semver"
-  packages = ["."]
-  revision = "2ee87856327ba09384cabd113bc6b5d174e9ec0f"
-  version = "v3.5.1"
-
-[[projects]]
   name = "github.com/coreos/etcd"
   packages = [
     "auth/authpb",
@@ -883,6 +877,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "1192cdcb209e5e98fce6fd63a1ce2b249797739543b9532dc626cbb9dd04fea8"
+  inputs-digest = "3f54d53e018f53d5524351a03b0c609ed967c24fc39a894f5e94c0303c9a7696"
   solver-name = "gps-cdcl"
   solver-version = 1
