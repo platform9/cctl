@@ -29,6 +29,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	clusterutil "sigs.k8s.io/cluster-api/pkg/util"
 
+	"github.com/blang/semver"
 	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -644,19 +645,31 @@ type UpgradeRequired struct {
 	EtcdVersion       bool
 }
 
+func isUpgradeable(old, cur string) bool {
+	oldVersion, err := semver.Make(old)
+	if err != nil {
+		log.Fatalf("Unable to make a semver object of %s: %s", old, err)
+	}
+	currenVersion, err := semver.Make(cur)
+	if err != nil {
+		log.Fatalf("Unable to make a semver object of %s: %s", cur, err)
+	}
+	return currenVersion.GT(oldVersion)
+}
+
 func isUpgradeRequired(old *spv1.MachineComponentVersions, cur *spv1.MachineComponentVersions) (bool, UpgradeRequired) {
 	if cmp.Equal(old, cur) {
 		return false, UpgradeRequired{}
 	}
 
 	return true, UpgradeRequired{
-		old.NodeadmVersion != cur.NodeadmVersion,
-		old.EtcdadmVersion != cur.EtcdadmVersion,
-		old.KubernetesVersion != cur.KubernetesVersion,
-		old.CNIVersion != cur.CNIVersion,
-		old.FlannelVersion != cur.FlannelVersion,
-		old.KeepalivedVersion != cur.KeepalivedVersion,
-		old.EtcdVersion != cur.EtcdVersion,
+		isUpgradeable(old.NodeadmVersion, cur.NodeadmVersion),
+		isUpgradeable(old.KubernetesVersion, cur.KubernetesVersion),
+		isUpgradeable(old.CNIVersion, cur.CNIVersion),
+		isUpgradeable(old.FlannelVersion, cur.FlannelVersion),
+		isUpgradeable(old.KeepalivedVersion, cur.KeepalivedVersion),
+		isUpgradeable(old.KeepalivedVersion, cur.KeepalivedVersion),
+		isUpgradeable(old.EtcdVersion, cur.EtcdVersion),
 	}
 }
 
