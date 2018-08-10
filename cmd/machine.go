@@ -683,7 +683,7 @@ func upgradeMachine(ip string) {
 	upgradeRequired, upgrade := isUpgradeRequired(oldMachineSpec.ComponentVersions, currentComponentVersions)
 
 	if !upgradeRequired {
-		fmt.Printf("Machine is update to date\n")
+		fmt.Printf("Machine is up to date\n")
 		return
 	}
 
@@ -697,6 +697,7 @@ func upgradeMachine(ip string) {
 		// and create a new one with the same specs as the old one
 		createMachine(ip, oldProvisionedMachine.Spec.SSHConfig.Port, oldProvisionedMachine.Spec.VIPNetworkInterface,
 			role, oldProvisionedMachine.Spec.SSHConfig.PublicKeys)
+		fmt.Println("Machine upgraded successfully.")
 		return
 	}
 
@@ -716,6 +717,7 @@ func upgradeMachine(ip string) {
 		if err := state.PullFromAPIs(); err != nil {
 			log.Fatalf("Unable to sync on-disk state: %v", err)
 		}
+		fmt.Println("Machine upgraded successfully.")
 		return
 	}
 }
