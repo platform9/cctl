@@ -29,10 +29,10 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	clusterutil "sigs.k8s.io/cluster-api/pkg/util"
 
-		corev1 "k8s.io/api/core/v1"
+	"github.com/google/go-cmp/cmp"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"github.com/google/go-cmp/cmp"
 )
 
 var (
@@ -695,13 +695,13 @@ func upgradeMachine(ip string) {
 		deleteMachine(ip, false, false)
 		role := string(oldMachineSpec.Roles[0])
 		// and create a new one with the same specs as the old one
-		createMachine(ip ,oldProvisionedMachine.Spec.SSHConfig.Port, oldProvisionedMachine.Spec.VIPNetworkInterface,
+		createMachine(ip, oldProvisionedMachine.Spec.SSHConfig.Port, oldProvisionedMachine.Spec.VIPNetworkInterface,
 			role, oldProvisionedMachine.Spec.SSHConfig.PublicKeys)
 		return
 	}
 
 	// A nodeadm/etcdadm version change does not require an actuator call, just a state file update
-	if upgrade.NodeadmVersion || upgrade.EtcdadmVersion  {
+	if upgrade.NodeadmVersion || upgrade.EtcdadmVersion {
 		oldMachineSpec.ComponentVersions.NodeadmVersion = currentComponentVersions.NodeadmVersion
 		oldMachineSpec.ComponentVersions.EtcdadmVersion = currentComponentVersions.EtcdadmVersion
 		fmt.Printf("Nodeadm/Etcdadm only change, updating state file...\n")
