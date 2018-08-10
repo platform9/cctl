@@ -29,6 +29,7 @@ const (
 	DefaultFlannelVersion              = "v0.10.0"
 	DefaultKeepalivedVersion           = "v2.0.4"
 	DefaultEtcdVersion                 = "v3.3.8"
+	EtcdSnapshotRemotePath             = "/tmp/etcd.snapshot"
 	ClusterV1PrintTemplate             = `Cluster Information
 ------- ------------
 Cluster Name       : {{ .Cluster.ObjectMeta.Name}}
