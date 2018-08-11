@@ -400,15 +400,6 @@ var clusterCmdRecover = &cobra.Command{
 	},
 }
 
-var clusterCmdBackup = &cobra.Command{
-	Use:   "cluster",
-	Short: "Backup the cluster",
-	Run: func(cmd *cobra.Command, args []string) {
-		// Stub code
-		fmt.Println("Running Backup cluster")
-	},
-}
-
 func init() {
 	createCmd.AddCommand(clusterCmdCreate)
 	clusterCmdCreate.Flags().String("serviceNetwork", "10.1.0.0/16", "Network CIDR for services e.g. 10.1.0.0/16")
@@ -429,5 +420,4 @@ func init() {
 	getCmd.AddCommand(clusterCmdGet)
 	upgradeCmd.AddCommand(clusterCmdUpgrade)
 	recoverCmd.AddCommand(clusterCmdRecover)
-	backupCmd.AddCommand(clusterCmdBackup)
 }
