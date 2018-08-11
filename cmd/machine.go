@@ -661,7 +661,7 @@ func isUpgradeRequired(old *spv1.MachineComponentVersions, cur *spv1.MachineComp
 }
 
 func upgradeMachine(ip string) {
-	fmt.Printf("Upgrading machine %s\n", ip)
+	log.Printf("Upgrading machine %s\n", ip)
 
 	oldMachine, err := state.ClusterClient.ClusterV1alpha1().
 		Machines(common.DefaultNamespace).
@@ -683,7 +683,7 @@ func upgradeMachine(ip string) {
 	upgradeRequired, upgrade := isUpgradeRequired(oldMachineSpec.ComponentVersions, currentComponentVersions)
 
 	if !upgradeRequired {
-		fmt.Printf("Machine is up to date\n")
+		log.Println("Machine is up to date.")
 		return
 	}
 
@@ -697,7 +697,7 @@ func upgradeMachine(ip string) {
 		// and create a new one with the same specs as the old one
 		createMachine(ip, oldProvisionedMachine.Spec.SSHConfig.Port, oldProvisionedMachine.Spec.VIPNetworkInterface,
 			role, oldProvisionedMachine.Spec.SSHConfig.PublicKeys)
-		fmt.Println("Machine upgraded successfully.")
+		log.Println("Machine upgraded successfully.")
 		return
 	}
 
@@ -705,7 +705,7 @@ func upgradeMachine(ip string) {
 	if upgrade.NodeadmVersion || upgrade.EtcdadmVersion {
 		oldMachineSpec.ComponentVersions.NodeadmVersion = currentComponentVersions.NodeadmVersion
 		oldMachineSpec.ComponentVersions.EtcdadmVersion = currentComponentVersions.EtcdadmVersion
-		fmt.Println("Nodeadm/Etcdadm only change, updating state file")
+		log.Println("Nodeadm/Etcdadm only change, updating state file.")
 
 		if err := sputil.PutMachineSpec(*oldMachineSpec, oldMachine); err != nil {
 			log.Fatalf("unable to encode machine provider spec: %v", err)
@@ -717,7 +717,7 @@ func upgradeMachine(ip string) {
 		if err := state.PullFromAPIs(); err != nil {
 			log.Fatalf("Unable to sync on-disk state: %v", err)
 		}
-		fmt.Println("Machine upgraded successfully.")
+		log.Println("Machine upgraded successfully.")
 		return
 	}
 }
