@@ -324,7 +324,70 @@ func restartKubelet(client sshmachine.Client) error {
 	return nil
 }
 
+var snapshotEtcdCmd = &cobra.Command{
+	Use:   "etcd",
+	Short: "Creates and downloads an etcd snapshot",
+	Run: func(cmd *cobra.Command, args []string) {
+		ip, err := cmd.Flags().GetString("ip")
+		if err != nil {
+			log.Fatalf("Unable to parse `ip`: %v", err)
+		}
+		localPath, err := cmd.Flags().GetString("snapshot")
+		if err != nil {
+			log.Fatalf("Unable to parse `snapshot`: %v", err)
+		}
+		remotePath := common.EtcdSnapshotRemotePath
+
+		machine, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).Get(ip, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				log.Fatalf("Machine %q not found", ip)
+			}
+			log.Fatalf("Unable to get machine %q: %v", ip, err)
+		}
+		machineStatus, err := sputil.GetMachineStatus(*machine)
+		if err != nil {
+			log.Fatalf("Unable to decode machine %q spec: %v", machine.Name, err)
+		}
+		client, err := sshMachineClientFromSSHConfig(machineStatus.SSHConfig)
+		if err != nil {
+			log.Fatalf("Unable to create machine client for machine %q: %v", machine.Name, err)
+		}
+
+		log.Println("[snapshot] Creating snapshot")
+		if err := createSnapshot(remotePath, client); err != nil {
+			log.Fatalf("Unable to create etcd snapshot: %v", err)
+		}
+		log.Println("[snapshot] Downloading snapshot")
+		if err := downloadSnapshot(remotePath, localPath, client); err != nil {
+			log.Fatalf("Unable to download etcd snapshot: %v", err)
+		}
+		log.Printf("[snapshot] Downloaded snapshot to %q", localPath)
+	},
+}
+
+func createSnapshot(remotePath string, client sshmachine.Client) error {
+	cmd := fmt.Sprintf("%s snapshot save %s", "/opt/bin/etcdctl.sh", remotePath)
+	stdOut, stdErr, err := client.RunCommand(cmd)
+	if err != nil {
+		return fmt.Errorf("error running %q: %v (stdout: %q, stderr: %q)", cmd, err, string(stdOut), string(stdErr))
+	}
+	return nil
+}
+
+func downloadSnapshot(remotePath, localPath string, client sshmachine.Client) error {
+	snapshotBytes, err := client.ReadFile(remotePath)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(localPath, snapshotBytes, 0600)
+}
+
 func init() {
 	recoverEtcdCmd.Flags().String("snapshot", "", "Path of the etcd snapshot used to recover the cluster.")
 	recoverCmd.AddCommand(recoverEtcdCmd)
+
+	snapshotEtcdCmd.Flags().String("ip", "", "IP of the machine used to create the etcd snapshot")
+	snapshotEtcdCmd.Flags().String("snapshot", "", "Path of the etcd snapshot used to recover the cluster.")
+	snapshotCmd.AddCommand(snapshotEtcdCmd)
 }
