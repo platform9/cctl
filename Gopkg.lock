@@ -161,6 +161,17 @@
   revision = "e89373fe6b4a7413d7acd6da1725b83ef713e6e4"
 
 [[projects]]
+  name = "github.com/google/go-cmp"
+  packages = [
+    "cmp",
+    "cmp/internal/diff",
+    "cmp/internal/function",
+    "cmp/internal/value"
+  ]
+  revision = "3af367b6b30c263d47e8895973edcca9a49cf029"
+  version = "v0.2.0"
+
+[[projects]]
   branch = "master"
   name = "github.com/google/gofuzz"
   packages = ["."]
@@ -866,6 +877,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "8f8c73e45a9e2e321f233744b0db28e6a0e8e81b91e5ae2d3ec6839683a127ae"
+  inputs-digest = "3f54d53e018f53d5524351a03b0c609ed967c24fc39a894f5e94c0303c9a7696"
   solver-name = "gps-cdcl"
   solver-version = 1
