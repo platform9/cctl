@@ -475,8 +475,8 @@ func adminKubeconfigFromMachine(machine *clusterv1.Machine, provisionedMachine *
 	// chmod file for read access for all users
 	stdOut, stdErr, err := machineClient.RunCommand("chmod 0644 /etc/kubernetes/admin.conf")
 	if err != nil {
-		fmt.Println(stdOut)
-		fmt.Println(stdErr)
+		log.Println(stdOut)
+		log.Println(stdErr)
 		return nil, fmt.Errorf("unable to change kubeconfig file permissions on %q: %v", machine.Name, err)
 	}
 	fileContents, err := machineClient.ReadFile("/etc/kubernetes/admin.conf")
@@ -486,8 +486,8 @@ func adminKubeconfigFromMachine(machine *clusterv1.Machine, provisionedMachine *
 	// chmod file to keep it secure
 	stdOut, stdErr, err = machineClient.RunCommand("chmod 0600 /etc/kubernetes/admin.conf")
 	if err != nil {
-		fmt.Println(stdOut)
-		fmt.Println(stdErr)
+		log.Println(stdOut)
+		log.Println(stdErr)
 		return nil, fmt.Errorf("unable to change kubeconfig file permissions on %q: %v", machine.Name, err)
 	}
 	return fileContents, nil
