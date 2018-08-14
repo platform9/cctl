@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -164,9 +165,9 @@ func recoverEtcd(localPath, remotePath string, etcdCASecret *corev1.Secret, clus
 	}
 
 	for _, mwc := range mastersWithClient {
-		log.Printf("[recover etcd] Restarting kubelet on master %q to trigger immediate API server restart", mwc.Machine.Name)
-		if err := restartKubelet(mwc.Client); err != nil {
-			log.Printf("Warning: Unable to restart kubelet on machine %q: %v", mwc.Machine.Name, err)
+		log.Printf("[recover etcd] Removing kube-apiserver container on master %q to trigger immediate restart", mwc.Machine.Name)
+		if err := removeKubeAPIServerContainer(mwc.Client); err != nil {
+			fmt.Errorf("unable to remove kube-apiserver container on master %q: %v", mwc.Machine.Name, err)
 		}
 	}
 
@@ -315,13 +316,59 @@ func etcdMemberFromMachine(machineClient sshmachine.Client) (spv1.EtcdMember, er
 	return etcdMember, nil
 }
 
-func restartKubelet(client sshmachine.Client) error {
-	cmd := fmt.Sprintf("systemctl restart kubelet")
+func buildDockerFilterFlags(filters []string) string {
+	var flags []string
+	for _, f := range filters {
+		flags = append(flags, fmt.Sprintf("--filter %q", f))
+	}
+	return strings.Join(flags, " ")
+}
+
+func identifyDockerContainer(filters []string, client sshmachine.Client) (string, error) {
+	filterFlags := buildDockerFilterFlags(filters)
+	cmd := fmt.Sprintf("docker ps --quiet %s", filterFlags)
+	stdOut, stdErr, err := client.RunCommand(cmd)
+	if err != nil {
+		return "", fmt.Errorf("error running %q: %v (stdout: %q, stderr: %q)", cmd, err, string(stdOut), string(stdErr))
+	}
+	containerID := strings.TrimSpace(string(stdOut))
+	if containerID == "" {
+		return "", fmt.Errorf("unable to find container matching filters %q", filters)
+	}
+	return containerID, nil
+}
+
+func stopDockerContainer(containerID string, client sshmachine.Client) error {
+	cmd := fmt.Sprintf("docker stop %s", containerID)
 	stdOut, stdErr, err := client.RunCommand(cmd)
 	if err != nil {
 		return fmt.Errorf("error running %q: %v (stdout: %q, stderr: %q)", cmd, err, string(stdOut), string(stdErr))
 	}
 	return nil
+}
+
+func removeDockerContainer(containerID string, client sshmachine.Client) error {
+	cmd := fmt.Sprintf("docker rm %s", containerID)
+	stdOut, stdErr, err := client.RunCommand(cmd)
+	if err != nil {
+		return fmt.Errorf("error running %q: %v (stdout: %q, stderr: %q)", cmd, err, string(stdOut), string(stdErr))
+	}
+	return nil
+}
+
+func removeKubeAPIServerContainer(client sshmachine.Client) error {
+	filters := []string{
+		common.DockerKubeAPIServerNameFilter,
+		common.DockerRunningStatusFilter,
+	}
+	apiServerContainerID, err := identifyDockerContainer(filters, client)
+	if err != nil {
+		return fmt.Errorf("unable to identify kube-apiserver container: %v", err)
+	}
+	if err := stopDockerContainer(apiServerContainerID, client); err != nil {
+		return err
+	}
+	return removeDockerContainer(apiServerContainerID, client)
 }
 
 var snapshotEtcdCmd = &cobra.Command{

@@ -30,6 +30,8 @@ const (
 	DefaultKeepalivedVersion           = "v2.0.4"
 	DefaultEtcdVersion                 = "v3.3.8"
 	EtcdSnapshotRemotePath             = "/tmp/etcd.snapshot"
+	DockerKubeAPIServerNameFilter      = "name=k8s_kube-apiserver.*kube-system.*"
+	DockerRunningStatusFilter          = "status=running"
 	ClusterV1PrintTemplate             = `Cluster Information
 ------- ------------
 Cluster Name       : {{ .Cluster.ObjectMeta.Name}}
