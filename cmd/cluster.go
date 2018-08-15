@@ -43,19 +43,38 @@ var clusterCmdCreate = &cobra.Command{
 		if (len(saPrivateKeyFile) == 0) != (len(saPublicKeyFile) == 0) {
 			log.Fatalf("Must specify both saPrivateKey and saPublicKey")
 		}
-		caKeyFile := cmd.Flag("cakey").Value.String()
-		caCertFile := cmd.Flag("cacert").Value.String()
-		if (len(caKeyFile) == 0) != (len(caCertFile) == 0) {
-			log.Fatalf("Must specify both caKeyFile and caCertFile")
+		apiServerCACertFile := cmd.Flag("apiserver-ca-cert").Value.String()
+		apiServerCAKeyFile := cmd.Flag("apiserver-ca-key").Value.String()
+		if (len(apiServerCAKeyFile) == 0) != (len(apiServerCAKeyFile) == 0) {
+			log.Fatalf("Must specify both --apiserver-ca-cert and --apiserver-ca-key")
+		}
+		etcdCACertFile := cmd.Flag("etcd-ca-cert").Value.String()
+		etcdCAKeyFile := cmd.Flag("etcd-ca-key").Value.String()
+		if (len(etcdCAKeyFile) == 0) != (len(etcdCAKeyFile) == 0) {
+			log.Fatalf("Must specify both --etcd-ca-cert and --etcd-ca-key")
+		}
+		frontProxyCACertFile := cmd.Flag("front-proxy-ca-cert").Value.String()
+		frontProxyCAKeyFile := cmd.Flag("front-proxy-ca-key").Value.String()
+		if (len(frontProxyCAKeyFile) == 0) != (len(frontProxyCAKeyFile) == 0) {
+			log.Fatalf("Must specify both --front-proxy-ca-cert and --front-proxy-ca-key")
 		}
 
-		newCommonCASecret := createCASecret(common.DefaultCommonCASecretName, caCertFile, caKeyFile)
+		newAPIServerCASecret := createCASecret(common.DefaultAPIServerCASecretName, apiServerCACertFile, apiServerCAKeyFile)
+		newEtcdCASecret := createCASecret(common.DefaultEtcdCASecretName, etcdCACertFile, etcdCAKeyFile)
+		newFrontProxyCASecret := createCASecret(common.DefaultFrontProxyCASecretName, frontProxyCACertFile, frontProxyCAKeyFile)
+
 		newServiceAccountKeySecret := createServiceAccountKeySecret(saPrivateKeyFile, saPublicKeyFile)
 		newBootstrapTokenSecret := createBootstrapTokenSecret(common.DefaultBootstrapTokenSecretName)
 		newCluster := createCluster(common.DefaultClusterName, podsCIDR, servicesCIDR, vip, routerID)
 
-		if _, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Create(newCommonCASecret); err != nil {
-			log.Fatalf("Unable to create common CA secret: %v", err)
+		if _, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Create(newAPIServerCASecret); err != nil {
+			log.Fatalf("Unable to create API server CA secret: %v", err)
+		}
+		if _, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Create(newEtcdCASecret); err != nil {
+			log.Fatalf("Unable to create etcd CA secret: %v", err)
+		}
+		if _, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Create(newFrontProxyCASecret); err != nil {
+			log.Fatalf("Unable to create front proxy CA secret: %v", err)
 		}
 		if _, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Create(newServiceAccountKeySecret); err != nil {
 			log.Fatalf("Unable to create service account secret: %v", err)
@@ -117,13 +136,13 @@ func createCluster(clusterName, podsCIDR, servicesCIDR, vip string, routerID int
 			Kind:       "ClusterSpec",
 		},
 		APIServerCASecret: &corev1.LocalObjectReference{
-			Name: common.DefaultCommonCASecretName,
+			Name: common.DefaultAPIServerCASecretName,
 		},
 		EtcdCASecret: &corev1.LocalObjectReference{
-			Name: common.DefaultCommonCASecretName,
+			Name: common.DefaultEtcdCASecretName,
 		},
 		FrontProxyCASecret: &corev1.LocalObjectReference{
-			Name: common.DefaultCommonCASecretName,
+			Name: common.DefaultFrontProxyCASecretName,
 		},
 		ServiceAccountKeySecret: &corev1.LocalObjectReference{
 			Name: common.DefaultServiceAccountKeySecretName,
@@ -397,8 +416,12 @@ func init() {
 	clusterCmdCreate.Flags().String("podNetwork", "10.2.0.0/16", "Network CIDR for pods e.g. 10.2.0.0.16")
 	clusterCmdCreate.Flags().String("vip", "", "Virtual IP to be used for multi master setup")
 	clusterCmdCreate.Flags().String("routerID", "", "Virtual router ID for keepalived for multi master setup. Must be in the range [0, 254]. Must be unique within a single L2 network domain.")
-	clusterCmdCreate.Flags().String("cacert", "", "Location of file containing CA cert for components to trust")
-	clusterCmdCreate.Flags().String("cakey", "", "Location of file containing CA key for signing certs")
+	clusterCmdCreate.Flags().String("apiserver-ca-cert", "", "The API Server CA certificate. Used to sign kubelet certificate requests and verify client certificates.")
+	clusterCmdCreate.Flags().String("apiserver-ca-key", "", "The API Server CA certificate key.")
+	clusterCmdCreate.Flags().String("etcd-ca-cert", "", "The etcd CA certificate. Used to sign and verify client and peer certificates.")
+	clusterCmdCreate.Flags().String("etcd-ca-key", "", "The etcd CA certificate key.")
+	clusterCmdCreate.Flags().String("front-proxy-ca-cert", "", "The front proxy CA certificate. Used to verify client certificates on incoming requests.")
+	clusterCmdCreate.Flags().String("front-proxy-ca-key", "", "The front proxy CA certificate key.")
 	clusterCmdCreate.Flags().String("saPrivateKey", "", "Location of file containing private key used for sigining service account tokens")
 	clusterCmdCreate.Flags().String("saPublicKey", "", "Location of file containing public key used for sigining service account tokens")
 	clusterCmdCreate.MarkFlagRequired("vip")
