@@ -40,6 +40,40 @@ var (
 	drainGracePeriodSeconds int
 )
 
+func updateBootstrapToken(masterMachine *clusterv1.Machine, masterProvisionedMachine *spv1.ProvisionedMachine) error {
+	log.Println("Getting a bootstrap token from a master")
+	newBootstrapTokenSecret, err := bootstrapTokenSecretFromMachine(masterMachine, masterProvisionedMachine)
+	if err != nil {
+		return fmt.Errorf("Unable to read bootstrap token from master: %v", err)
+	}
+	if _, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Get(common.DefaultBootstrapTokenSecretName, metav1.GetOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("Unable to get bootstrap token secret: %v", err)
+		}
+		if _, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Create(newBootstrapTokenSecret); err != nil {
+			return fmt.Errorf("Unable to create bootstrap token secret: %v", err)
+		}
+	} else {
+		if _, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Update(newBootstrapTokenSecret); err != nil {
+			return fmt.Errorf("Unable to update bootstrap token secret: %v", err)
+		}
+	}
+	return nil
+}
+
+func copyAdminConfFromMaster(masterMachine *clusterv1.Machine, masterProvisionedMachine *spv1.ProvisionedMachine,
+	newMachine *clusterv1.Machine, newProvisionedMachine *spv1.ProvisionedMachine) error {
+	log.Println("Writing admin kubeconfig to machine")
+	kubeconfig, err := adminKubeconfigFromMachine(masterMachine, masterProvisionedMachine)
+	if err != nil {
+		return fmt.Errorf("Unable to get admin kubeconfig from master: %v", err)
+	}
+	if err := writeAdminKubeconfigToMachine(kubeconfig, newMachine, newProvisionedMachine); err != nil {
+		return fmt.Errorf("Unable to write admin kubeconfig to machine: %v", err)
+	}
+	return nil
+}
+
 func createMachine(ip string, port int, iface string, roleString string, publicKeyFiles []string) {
 	role := clustercommon.MachineRole(roleString)
 	// TODO(dlipovetsky) Move to master validation code
@@ -95,28 +129,10 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 		if err != nil {
 			log.Fatalf("Unable to get a master machine and provisioned machine: %v", err)
 		}
-	}
-
-	if clusterutil.RoleContains(clustercommon.NodeRole, newMachine.Spec.Roles) {
-		log.Println("Getting a bootstrap token from a master")
-		newBootstrapTokenSecret, err := bootstrapTokenSecretFromMachine(masterMachine, masterProvisionedMachine)
-		if err != nil {
-			log.Fatalf("Unable to read bootstrap token from master: %v", err)
-		}
-		if _, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Get(common.DefaultBootstrapTokenSecretName, metav1.GetOptions{}); err != nil {
-			if !apierrors.IsNotFound(err) {
-				log.Fatalf("Unable to get bootstrap token secret: %v", err)
-			}
-			if _, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Create(newBootstrapTokenSecret); err != nil {
-				log.Fatalf("Unable to create bootstrap token secret: %v", err)
-			}
-		} else {
-			if _, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Update(newBootstrapTokenSecret); err != nil {
-				log.Fatalf("Unable to update bootstrap token secret: %v", err)
-			}
+		if err := updateBootstrapToken(masterMachine, masterProvisionedMachine); err != nil {
+			log.Fatalf("Unable to update bootstrap token: %v", err)
 		}
 	}
-
 	machineClientBuilder := sshmachine.NewClient
 	insecureIgnoreHostKey := false
 	if len(publicKeys) == 0 {
@@ -135,13 +151,8 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 	}
 
 	if clusterutil.RoleContains(clustercommon.NodeRole, newMachine.Spec.Roles) {
-		log.Println("Writing admin kubeconfig to machine")
-		kubeconfig, err := adminKubeconfigFromMachine(masterMachine, masterProvisionedMachine)
-		if err != nil {
-			log.Fatalf("Unable to get admin kubeconfig from master: %v", err)
-		}
-		if err := writeAdminKubeconfigToMachine(kubeconfig, newMachine, newProvisionedMachine); err != nil {
-			log.Fatalf("Unable to write admin kubeconfig to machine: %v", err)
+		if err := copyAdminConfFromMaster(masterMachine, masterProvisionedMachine, newMachine, newProvisionedMachine); err != nil {
+			log.Fatalf("Unable to place admin.conf on the node: %v", err)
 		}
 	}
 
@@ -151,27 +162,14 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 		log.Fatalf("Unable to get machine %q status: %v", newMachine.Name, err)
 	}
 	if machineStatus.EtcdMember != nil {
-		clusterStatus, err := sputil.GetClusterStatus(*cluster)
-		if err != nil {
-			log.Fatalf("Unable to get cluster status: %v", err)
-		}
-
-		etcdMemberSet := setsutil.NewEtcdMemberSet(clusterStatus.EtcdMembers...)
-		etcdMemberSet.Insert(*machineStatus.EtcdMember)
-		clusterStatus.EtcdMembers = etcdMemberSet.List()
-
-		if err := sputil.PutClusterStatus(*clusterStatus, cluster); err != nil {
-			log.Fatalf("Unable to update cluster status: %v", err)
-		}
-		if _, err := state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).UpdateStatus(cluster); err != nil {
-			log.Fatalf("Unable to update cluster: %v", err)
+		if err := addEtcdMemberToClusterStatus(cluster, machineStatus); err != nil {
+			log.Fatalf("Unable to add etcd member to cluster status: %v", err)
 		}
 	}
 
 	if err := state.PullFromAPIs(); err != nil {
 		log.Fatalf("Unable to sync on-disk state: %v", err)
 	}
-
 	log.Println("Machine created successfully.")
 }
 
@@ -195,7 +193,7 @@ var machineCmdCreate = &cobra.Command{
 	},
 }
 
-func getCurrentComponentVersions() *spv1.MachineComponentVersions {
+func getGoalComponentVersions() *spv1.MachineComponentVersions {
 	return &spv1.MachineComponentVersions{
 		NodeadmVersion:    common.DefaultNodeadmVersion,
 		EtcdadmVersion:    common.DefaultEtcdadmVersion,
@@ -249,7 +247,7 @@ func newProvisionedMachineAndMachine(name string, role clustercommon.MachineRole
 		Roles: []spv1.MachineRole{
 			spv1.MachineRole(role),
 		},
-		ComponentVersions: getCurrentComponentVersions(),
+		ComponentVersions: getGoalComponentVersions(),
 	}
 	if err := sputil.PutMachineSpec(machineProviderSpec, &newMachine); err != nil {
 		return nil, nil, fmt.Errorf("unable to encode machine provider spec: %v", err)
@@ -324,20 +322,8 @@ func deleteMachine(ip string, force bool, skipDrainDelete bool) {
 		log.Fatalf("Unable to get machine %q status: %v", targetMachine.Name, err)
 	}
 	if machineStatus.EtcdMember != nil {
-		clusterStatus, err := sputil.GetClusterStatus(*cluster)
-		if err != nil {
-			log.Fatalf("Unable to get cluster status: %v", err)
-		}
-
-		etcdMemberSet := setsutil.NewEtcdMemberSet(clusterStatus.EtcdMembers...)
-		etcdMemberSet.Delete(*machineStatus.EtcdMember)
-		clusterStatus.EtcdMembers = etcdMemberSet.List()
-
-		if err := sputil.PutClusterStatus(*clusterStatus, cluster); err != nil {
-			log.Fatalf("Unable to update cluster status: %v", err)
-		}
-		if _, err := state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).UpdateStatus(cluster); err != nil {
-			log.Fatalf("Unable to update cluster: %v", err)
+		if err := deleteEtcdMemberFromClusterStatus(cluster, machineStatus); err != nil {
+			log.Fatalf("Unable to delete etcd member from cluster status: %v", err)
 		}
 	}
 
@@ -394,6 +380,42 @@ func deleteMustNotOrphanNodes(targetMachine *clusterv1.Machine) {
 			log.Fatalf("Not deleting last master while %v nodes are in the cluster. Delete the nodes first.", countNodes)
 		}
 	}
+}
+
+func deleteEtcdMemberFromClusterStatus(cluster *clusterv1.Cluster, machineStatus *spv1.MachineStatus) error {
+	clusterStatus, err := sputil.GetClusterStatus(*cluster)
+	if err != nil {
+		return fmt.Errorf("unable to get cluster status: %v", err)
+	}
+	etcdMemberSet := setsutil.NewEtcdMemberSet(clusterStatus.EtcdMembers...)
+	etcdMemberSet.Delete(*machineStatus.EtcdMember)
+	clusterStatus.EtcdMembers = etcdMemberSet.List()
+
+	if err := sputil.PutClusterStatus(*clusterStatus, cluster); err != nil {
+		return fmt.Errorf("unable to update cluster status: %v", err)
+	}
+	if _, err := state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).UpdateStatus(cluster); err != nil {
+		return fmt.Errorf("unable to update cluster: %v", err)
+	}
+	return nil
+}
+
+func addEtcdMemberToClusterStatus(cluster *clusterv1.Cluster, machineStatus *spv1.MachineStatus) error {
+	clusterStatus, err := sputil.GetClusterStatus(*cluster)
+	if err != nil {
+		return fmt.Errorf("unable to get cluster status: %v", err)
+	}
+	etcdMemberSet := setsutil.NewEtcdMemberSet(clusterStatus.EtcdMembers...)
+	etcdMemberSet.Insert(*machineStatus.EtcdMember)
+	clusterStatus.EtcdMembers = etcdMemberSet.List()
+
+	if err := sputil.PutClusterStatus(*clusterStatus, cluster); err != nil {
+		return fmt.Errorf("unable to update cluster status: %v", err)
+	}
+	if _, err := state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).UpdateStatus(cluster); err != nil {
+		return fmt.Errorf("unable to update cluster: %v", err)
+	}
+	return nil
 }
 
 func bootstrapTokenSecretFromMachine(machine *clusterv1.Machine, provisionedMachine *spv1.ProvisionedMachine) (*corev1.Secret, error) {
@@ -507,64 +529,23 @@ func writeAdminKubeconfigToMachine(kubeconfig []byte, machine *clusterv1.Machine
 }
 
 func drainAndDeleteNodeForMachine(targetMachine *clusterv1.Machine, targetProvisionedMachine *spv1.ProvisionedMachine) error {
-	var stdOut, stdErr []byte
-	var cmd string
 	var err error
-
 	targetMachineClient, err := sshMachineClientFromSSHConfig(targetProvisionedMachine.Spec.SSHConfig)
 	if err != nil {
 		return fmt.Errorf("unable to create machine client for machine %q: %v", targetMachine.Name, err)
 	}
-
-	log.Printf("Reading system UUID of machine %q", targetMachine.Name)
-	cmd = fmt.Sprintf("cat %s", common.SystemUUIDFile)
-	stdOut, stdErr, err = targetMachineClient.RunCommand(cmd)
+	nodeName, err := getNodeName(targetMachine.Name, targetMachineClient)
 	if err != nil {
-		return fmt.Errorf("error running %q: %v (%s) (%s)", cmd, err, string(stdOut), string(stdErr))
+		return fmt.Errorf("unable to get node name: %v", err)
 	}
-	systemUUID := strings.TrimSpace(string(stdOut))
-
-	// TODO(dlipovetsky) Handle the case when kubectl is not found. Possibly
-	// infer that the nodeadm reset ran at least as far as removing the kubectl
-	// binary. nodeName includes the object kind, i.e.,
-
-	log.Printf("Identifying node for machine %q", targetMachine.Name)
-	// Requires sudo because the kubelet kubeconfig is readable by only by root.
-	cmd = fmt.Sprintf(`%s --kubeconfig=%s get nodes -ojsonpath='{.items[?(@.status.nodeInfo.systemUUID=="%s")].metadata.name}'`, common.KubectlFile, common.KubeletKubeconfig, systemUUID)
-	stdOut, stdErr, err = targetMachineClient.RunCommand(cmd)
-	if err != nil {
-		return fmt.Errorf("error running %q: %v (%s) (%s)", cmd, err, string(stdOut), string(stdErr))
-	}
-	nodeName := strings.TrimSpace(string(stdOut))
-
 	if len(nodeName) != 0 {
 		log.Printf("Draining cluster node %q for machine %q", nodeName, targetMachine.Name)
-		// Requires sudo because the admin kubeconfig is readable by only by
-		// root.
-		// Use the admin kubeconfig because admin permissions are required to
-		// drain.
-		// Use --ignore-daemonsets because any DaemonSet-managed Pods will
-		// prevent the drain otherwise, and because all Nodes have DaemonSet
-		// Pods (kube-proxy, overlay network).
-		// Do NOT use --delete-local-data. Pods using emptyDir volumes must be
-		// removed by the user, since removing them causes the data to be lost.
-		// Do NOT use --force. Unmanaged pods must be removed by the user, since
-		// they won't be rescheduled to another node.
-		cmd = fmt.Sprintf("%s --kubeconfig=%s drain %s --timeout=%v --grace-period=%v --ignore-daemonsets", common.KubectlFile, common.AdminKubeconfig, nodeName, drainTimeout, drainGracePeriodSeconds)
-		stdOut, stdErr, err = targetMachineClient.RunCommand(cmd)
-		if err != nil {
-			return fmt.Errorf("error running %q: %v (%s) (%s)", cmd, err, string(stdOut), string(stdErr))
+		if err := drainNode(nodeName, targetMachineClient); err != nil {
+			return fmt.Errorf("unable to drain node: %v", err)
 		}
-		log.Println(string(stdOut))
-
 		log.Printf("Deleting cluster node %q for machine %q", nodeName, targetMachine.Name)
-		// Requires sudo because the kubelet kubeconfig is readable by only by
-		// root.
-		stdOut, stdErr, err = targetMachineClient.RunCommand(fmt.Sprintf("%s --kubeconfig=%s delete node %s", common.KubectlFile, common.KubeletKubeconfig, nodeName))
-		if err != nil {
-			return fmt.Errorf("error running %q: %v (%s) (%s)", cmd, err, string(stdOut), string(stdErr))
-		}
-		log.Println(string(stdOut))
+		return deleteNode(nodeName, targetMachineClient)
+
 	}
 	return nil
 }
@@ -660,66 +641,231 @@ func isUpgradeRequired(old *spv1.MachineComponentVersions, cur *spv1.MachineComp
 	}
 }
 
+type instanceStatus *clusterv1.Machine
+
 func upgradeMachine(ip string) {
 	log.Printf("Upgrading machine %s\n", ip)
-
-	oldMachine, err := state.ClusterClient.ClusterV1alpha1().
+	//Get the current machine
+	currentMachine, err := state.ClusterClient.ClusterV1alpha1().
 		Machines(common.DefaultNamespace).
 		Get(ip, metav1.GetOptions{})
 	if err != nil {
-		log.Fatalf("Unable to get machine %q: %v\n", ip, err)
+		log.Fatalf("Unable to get machine %q spec: %v", currentMachine.Name, err)
 	}
-	oldMachineSpec, err := sputil.GetMachineSpec(*oldMachine)
+	currentMachineSpec, err := sputil.GetMachineSpec(*currentMachine)
 	if err != nil {
-		log.Fatalf("Unable to get machine spec: %q: %v\n", oldMachine, err)
+		log.Fatalf("Unable to decode machine %q spec: %v", currentMachine.Name, err)
 	}
-
-	oldProvisionedMachine, err := state.SPClient.SshproviderV1alpha1().
+	currentProvisionedMachine, err := state.SPClient.SshproviderV1alpha1().
 		ProvisionedMachines(common.DefaultNamespace).
-		Get(oldMachineSpec.ProvisionedMachineName, metav1.GetOptions{})
+		Get(currentMachineSpec.ProvisionedMachineName, metav1.GetOptions{})
 
-	currentComponentVersions := getCurrentComponentVersions()
-
-	upgradeRequired, upgrade := isUpgradeRequired(oldMachineSpec.ComponentVersions, currentComponentVersions)
-
+	//Check if upgrade is required
+	goalComponentVersions := getGoalComponentVersions()
+	upgradeRequired, upgrade := isUpgradeRequired(currentMachineSpec.ComponentVersions, goalComponentVersions)
 	if !upgradeRequired {
 		log.Println("Machine is up to date.")
 		return
 	}
 
-	// If any of the components except for nodeadm/etcdadm were updated, trigger an upgrade
+	// If any of the components except for nodeadm/etcdadm were updated, trigger an actuator update
 	if upgrade.KubernetesVersion || upgrade.CNIVersion || upgrade.FlannelVersion ||
 		upgrade.KeepalivedVersion ||
 		upgrade.EtcdVersion {
-		// delete machine
-		deleteMachine(ip, false, false)
-		role := string(oldMachineSpec.Roles[0])
-		// and create a new one with the same specs as the old one
-		createMachine(ip, oldProvisionedMachine.Spec.SSHConfig.Port, oldProvisionedMachine.Spec.VIPNetworkInterface,
-			role, oldProvisionedMachine.Spec.SSHConfig.PublicKeys)
-		log.Println("Machine upgraded successfully.")
-		return
-	}
+		targetMachineClient, err := sshMachineClientFromSSHConfig(currentProvisionedMachine.Spec.SSHConfig)
+		if err != nil {
+			log.Fatalf("unable to create machine client for machine %q: %v", currentMachine.Name, err)
+		}
+		// Drain current node
+		nodeName, err := getNodeName(currentMachine.Name, targetMachineClient)
+		if err != nil {
+			log.Fatalf("Unable to get node name for machine %s: %v", currentMachine.Name, err)
+		}
+		if err := drainNode(nodeName, targetMachineClient); err != nil {
+			log.Fatalf("Unable to drain the node %s: %v", nodeName, err)
+		}
 
-	// A nodeadm/etcdadm version change does not require an actuator call, just a state file update
-	if upgrade.NodeadmVersion || upgrade.EtcdadmVersion {
-		oldMachineSpec.ComponentVersions.NodeadmVersion = currentComponentVersions.NodeadmVersion
-		oldMachineSpec.ComponentVersions.EtcdadmVersion = currentComponentVersions.EtcdadmVersion
-		log.Println("Nodeadm/Etcdadm only change, updating state file.")
+		//Prepare goal machine object using current machine
+		goalMachine := currentMachine.DeepCopy()
+		goalMachineSpec, err := sputil.GetMachineSpec(*goalMachine)
+		if err != nil {
+			log.Fatalf("Unable to decode machine %q spec: %v", goalMachine.Name, err)
+		}
+		goalMachineSpec.ComponentVersions = goalComponentVersions
+		sputil.PutMachineSpec(*goalMachineSpec, goalMachine)
 
-		if err := sputil.PutMachineSpec(*oldMachineSpec, oldMachine); err != nil {
-			log.Fatalf("unable to encode machine provider spec: %v", err)
+		//Add current machine as goal machine's annotation
+		if currentMachine.ObjectMeta.Annotations == nil {
+			currentMachine.ObjectMeta.Annotations = make(map[string]string)
 		}
-		if _, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).
-			Update(oldMachine); err != nil {
-			log.Fatalf("Unable to update machine: %v", err)
+		if _, err := sputil.SetMachineInstanceStatus(goalMachine, currentMachine); err != nil {
+			log.Fatalf("Unable to set machine instance status %v", err)
 		}
-		if err := state.PullFromAPIs(); err != nil {
-			log.Fatalf("Unable to sync on-disk state: %v", err)
+
+		//Instantiate actuator
+		machineClientBuilder := sshmachine.NewClient
+		insecureIgnoreHostKey := false
+		if len(currentProvisionedMachine.Spec.SSHConfig.PublicKeys) == 0 {
+			insecureIgnoreHostKey = true
+			log.Printf("Not able to verify machine SSH identity: No public keys given. Continuing...")
 		}
+		actuator := machineActuator.NewActuator(
+			state.KubeClient,
+			state.ClusterClient,
+			state.SPClient,
+			machineClientBuilder,
+			insecureIgnoreHostKey,
+		)
+
+		//If goal machine is a node we would have to update the token
+		//as current token might have expired
+		var masterMachine *clusterv1.Machine
+		var masterProvisionedMachine *spv1.ProvisionedMachine
+		if clusterutil.RoleContains(clustercommon.NodeRole, goalMachine.Spec.Roles) {
+			var err error
+			masterMachine, masterProvisionedMachine, err = masterMachineAndProvisionedMachine()
+			if err != nil {
+				log.Fatalf("Unable to get a master machine and provisioned machine: %v", err)
+			}
+			if err = updateBootstrapToken(masterMachine, masterProvisionedMachine); err != nil {
+				log.Fatalf("Unable to update bootstrap token for node")
+			}
+		}
+
+		//Call actuator's update
+		cluster, err := state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).Get(common.DefaultClusterName, metav1.GetOptions{})
+		if err != nil {
+			log.Fatalf("Unable to get cluster %s: %v", common.DefaultClusterName, err)
+		}
+		currentMachineStatus, err := sputil.GetMachineStatus(*currentMachine)
+		if err != nil {
+			log.Fatalf("Unable to get machine status: %v", err)
+		}
+		//We are deleting etcd member prior to actual delete from actuator
+		//this is still valid as delete only needs memberid (available in machine status)
+		//if delete called in actuator update succeeds this would allow us to pass correct cluster state to create
+		//if delete called in actuator update fails this state would never get persisted
+		if clusterutil.RoleContains(clustercommon.MasterRole, goalMachine.Spec.Roles) {
+			if err := deleteEtcdMemberFromClusterStatus(cluster, currentMachineStatus); err != nil {
+				log.Fatalf("Unable to delete etcd member from cluster status")
+			}
+		}
+		if err := actuator.Update(cluster, goalMachine); err != nil {
+			log.Fatalf("Unable to update the node %s: %v", nodeName, err)
+		}
+		goalMachineStatus, err := sputil.GetMachineStatus(*goalMachine)
+		if err != nil {
+			log.Fatalf("Unable to get machine status: %v", err)
+		}
+		if clusterutil.RoleContains(clustercommon.MasterRole, goalMachine.Spec.Roles) {
+			if err := addEtcdMemberToClusterStatus(cluster, goalMachineStatus); err != nil {
+				log.Fatalf("Unable to add etcd member from cluster status")
+			}
+		}
+
+		//Uncordon upgraded node
+		if clusterutil.RoleContains(clustercommon.NodeRole, goalMachine.Spec.Roles) {
+			if err := copyAdminConfFromMaster(masterMachine, masterProvisionedMachine, goalMachine, currentProvisionedMachine); err != nil {
+				log.Fatalf("Unable to copy admin conf to node: %v", err)
+			}
+		}
+		if err := uncordonNode(nodeName, targetMachineClient); err != nil {
+			log.Fatalf("Unable to uncordon the node %s: %v", nodeName, err)
+		}
+
+		//Reset annotation to empty
+		goalMachine.ObjectMeta.Annotations[common.InstanceStatusAnnotationKey] = ""
+
+		currentMachine = goalMachine.DeepCopy()
 		log.Println("Machine upgraded successfully.")
-		return
+
+	} else {
+		// A nodeadm/etcdadm version change does not require an actuator call, just a state file update
+		if upgrade.NodeadmVersion || upgrade.EtcdadmVersion {
+			currentMachineSpec.ComponentVersions.NodeadmVersion = goalComponentVersions.NodeadmVersion
+			currentMachineSpec.ComponentVersions.EtcdadmVersion = goalComponentVersions.EtcdadmVersion
+			log.Println("Nodeadm/Etcdadm only change, updating state file.")
+
+			if err := sputil.PutMachineSpec(*currentMachineSpec, currentMachine); err != nil {
+				log.Fatalf("unable to encode machine provider spec: %v", err)
+			}
+			log.Println("Machine upgraded successfully.")
+		}
 	}
+	if _, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).
+		Update(currentMachine); err != nil {
+		log.Fatalf("Unable to update machine: %v", err)
+	}
+	if err := state.PullFromAPIs(); err != nil {
+		log.Fatalf("Unable to sync on-disk state: %v", err)
+	}
+}
+func getNodeName(machineName string, machineClient sshmachine.Client) (string, error) {
+	log.Printf("Reading system UUID of machine %q", machineName)
+	cmd := fmt.Sprintf("cat %s", common.SystemUUIDFile)
+	stdOut, stdErr, err := machineClient.RunCommand(cmd)
+	if err != nil {
+		return "", fmt.Errorf("error running %q: %v (%s) (%s)", cmd, err, string(stdOut), string(stdErr))
+	}
+	systemUUID := strings.TrimSpace(string(stdOut))
+	// TODO(dlipovetsky) Handle the case when kubectl is not found. Possibly
+	// infer that the nodeadm reset ran at least as far as removing the kubectl
+	// binary. nodeName includes the object kind, i.e.,
+
+	log.Printf("Identifying node for machine %q", machineName)
+	// Requires sudo because the kubelet kubeconfig is readable by only by root.
+	cmd = fmt.Sprintf(`%s --kubeconfig=%s get nodes -ojsonpath='{.items[?(@.status.nodeInfo.systemUUID=="%s")].metadata.name}'`, common.KubectlFile, common.KubeletKubeconfig, systemUUID)
+	stdOut, stdErr, err = machineClient.RunCommand(cmd)
+	if err != nil {
+		return "", fmt.Errorf("error running %q: %v (%s) (%s)", cmd, err, string(stdOut), string(stdErr))
+	}
+	nodeName := strings.TrimSpace(string(stdOut))
+	return nodeName, nil
+}
+
+func drainNode(nodeName string, machineClient sshmachine.Client) error {
+	// Requires sudo because the admin kubeconfig is readable by only by
+	// root.
+	// Use the admin kubeconfig because admin permissions are required to
+	// drain.
+	// Use --ignore-daemonsets because any DaemonSet-managed Pods will
+	// prevent the drain otherwise, and because all Nodes have DaemonSet
+	// Pods (kube-proxy, overlay network).
+	// Do NOT use --delete-local-data. Pods using emptyDir volumes must be
+	// removed by the user, since removing them causes the data to be lost.
+	// Do NOT use --force. Unmanaged pods must be removed by the user, since
+	// they won't be rescheduled to another node.
+	cmd := fmt.Sprintf("%s --kubeconfig=%s drain %s --timeout=%v --grace-period=%v --ignore-daemonsets", common.KubectlFile, common.AdminKubeconfig, nodeName, drainTimeout, drainGracePeriodSeconds)
+	stdOut, stdErr, err := machineClient.RunCommand(cmd)
+	if err != nil {
+		return fmt.Errorf("error running %q: %v (%s) (%s)", cmd, err, string(stdOut), string(stdErr))
+	}
+	log.Println(string(stdOut))
+	return nil
+}
+
+func deleteNode(nodeName string, machineClient sshmachine.Client) error {
+	// Requires sudo because the kubelet kubeconfig is readable by only by
+	// root.
+	cmd := fmt.Sprintf("%s --kubeconfig=%s delete node %s", common.KubectlFile, common.KubeletKubeconfig, nodeName)
+	stdOut, stdErr, err := machineClient.RunCommand(cmd)
+	if err != nil {
+		return fmt.Errorf("error running %q: %v (%s) (%s)", cmd, err, string(stdOut), string(stdErr))
+	}
+	log.Println(string(stdOut))
+	return nil
+}
+
+func uncordonNode(nodeName string, machineClient sshmachine.Client) error {
+	// Requires sudo because the kubelet kubeconfig is readable by only by
+	// root.
+	cmd := fmt.Sprintf("%s --kubeconfig=%s uncordon %s", common.KubectlFile, common.AdminKubeconfig, nodeName)
+	stdOut, stdErr, err := machineClient.RunCommand(cmd)
+	if err != nil {
+		return fmt.Errorf("error running %q: %v (%s) (%s)", cmd, err, string(stdOut), string(stdErr))
+	}
+	log.Println(string(stdOut))
+	return nil
 }
 
 var machineCmdUpgrade = &cobra.Command{

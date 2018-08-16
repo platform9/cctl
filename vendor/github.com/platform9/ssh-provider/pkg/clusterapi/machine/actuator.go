@@ -197,8 +197,15 @@ func (a *Actuator) Delete(cluster *clusterv1.Cluster, machine *clusterv1.Machine
 	return nil
 }
 
-func (a *Actuator) Update(cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
-	return nil
+func (a *Actuator) Update(cluster *clusterv1.Cluster, goalMachine *clusterv1.Machine) error {
+	currentMachine, err := controller.GetMachineInstanceStatus(goalMachine)
+	if err != nil {
+		return fmt.Errorf("unable to get current machine from annotation %v", err)
+	}
+	if err := a.Delete(cluster, currentMachine); err != nil {
+		return fmt.Errorf("unable to delete machine %v", err)
+	}
+	return a.Create(cluster, goalMachine)
 }
 
 func (a *Actuator) Exists(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (bool, error) {
