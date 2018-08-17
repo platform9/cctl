@@ -23,7 +23,6 @@ import (
 	machineActuator "github.com/platform9/ssh-provider/pkg/clusterapi/machine"
 	sputil "github.com/platform9/ssh-provider/pkg/controller"
 	sshmachine "github.com/platform9/ssh-provider/pkg/machine"
-	setsutil "github.com/platform9/ssh-provider/pkg/util/sets"
 
 	clustercommon "sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
@@ -162,7 +161,7 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 		log.Fatalf("Unable to get machine %q status: %v", newMachine.Name, err)
 	}
 	if machineStatus.EtcdMember != nil {
-		if err := addEtcdMemberToClusterStatus(cluster, machineStatus); err != nil {
+		if err := insertClusterEtcdMember(*machineStatus.EtcdMember, cluster); err != nil {
 			log.Fatalf("Unable to add etcd member to cluster status: %v", err)
 		}
 	}
@@ -322,7 +321,7 @@ func deleteMachine(ip string, force bool, skipDrainDelete bool) {
 		log.Fatalf("Unable to get machine %q status: %v", targetMachine.Name, err)
 	}
 	if machineStatus.EtcdMember != nil {
-		if err := deleteEtcdMemberFromClusterStatus(cluster, machineStatus); err != nil {
+		if err := removeClusterEtcdMember(*machineStatus.EtcdMember, cluster); err != nil {
 			log.Fatalf("Unable to delete etcd member from cluster status: %v", err)
 		}
 	}
@@ -380,42 +379,6 @@ func deleteMustNotOrphanNodes(targetMachine *clusterv1.Machine) {
 			log.Fatalf("Not deleting last master while %v nodes are in the cluster. Delete the nodes first.", countNodes)
 		}
 	}
-}
-
-func deleteEtcdMemberFromClusterStatus(cluster *clusterv1.Cluster, machineStatus *spv1.MachineStatus) error {
-	clusterStatus, err := sputil.GetClusterStatus(*cluster)
-	if err != nil {
-		return fmt.Errorf("unable to get cluster status: %v", err)
-	}
-	etcdMemberSet := setsutil.NewEtcdMemberSet(clusterStatus.EtcdMembers...)
-	etcdMemberSet.Delete(*machineStatus.EtcdMember)
-	clusterStatus.EtcdMembers = etcdMemberSet.List()
-
-	if err := sputil.PutClusterStatus(*clusterStatus, cluster); err != nil {
-		return fmt.Errorf("unable to update cluster status: %v", err)
-	}
-	if _, err := state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).UpdateStatus(cluster); err != nil {
-		return fmt.Errorf("unable to update cluster: %v", err)
-	}
-	return nil
-}
-
-func addEtcdMemberToClusterStatus(cluster *clusterv1.Cluster, machineStatus *spv1.MachineStatus) error {
-	clusterStatus, err := sputil.GetClusterStatus(*cluster)
-	if err != nil {
-		return fmt.Errorf("unable to get cluster status: %v", err)
-	}
-	etcdMemberSet := setsutil.NewEtcdMemberSet(clusterStatus.EtcdMembers...)
-	etcdMemberSet.Insert(*machineStatus.EtcdMember)
-	clusterStatus.EtcdMembers = etcdMemberSet.List()
-
-	if err := sputil.PutClusterStatus(*clusterStatus, cluster); err != nil {
-		return fmt.Errorf("unable to update cluster status: %v", err)
-	}
-	if _, err := state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).UpdateStatus(cluster); err != nil {
-		return fmt.Errorf("unable to update cluster: %v", err)
-	}
-	return nil
 }
 
 func bootstrapTokenSecretFromMachine(machine *clusterv1.Machine, provisionedMachine *spv1.ProvisionedMachine) (*corev1.Secret, error) {
