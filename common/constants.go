@@ -32,6 +32,7 @@ const (
 	EtcdSnapshotRemotePath             = "/tmp/etcd.snapshot"
 	DockerKubeAPIServerNameFilter      = "name=k8s_kube-apiserver.*kube-system.*"
 	DockerRunningStatusFilter          = "status=running"
+	InstanceStatusAnnotationKey        = "instance-status"
 	ClusterV1PrintTemplate             = `Cluster Information
 ------- ------------
 Cluster Name       : {{ .Cluster.ObjectMeta.Name}}

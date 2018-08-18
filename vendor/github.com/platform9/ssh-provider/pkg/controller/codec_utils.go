@@ -8,9 +8,15 @@ import (
 	sshprovider "github.com/platform9/ssh-provider/pkg/apis/sshprovider/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 	jsonserializer "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	clusterapi "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
+
+const InstanceStatusAnnotationKey = "instance-status"
+
+type instanceStatus *clusterapi.Machine
 
 func PutClusterSpec(clusterSpec sshprovider.ClusterSpec, cluster *clusterapi.Cluster) error {
 	providerConfig, err := ClusterAPIProviderConfigFromClusterSpec(&clusterSpec)
@@ -206,4 +212,42 @@ func ClusterAPIProviderConfigFromMachineSpec(machineSpec *sshprovider.MachineSpe
 	return &runtime.RawExtension{
 		Raw: bytes.TrimSpace(buffer.Bytes()),
 	}, nil
+}
+
+func PutMachineInstanceStatus(machine *clusterapi.Machine, status instanceStatus) (*clusterapi.Machine, error) {
+	status.ObjectMeta.Annotations[InstanceStatusAnnotationKey] = ""
+
+	serializer := json.NewSerializer(json.DefaultMetaFactory, api.Scheme, api.Scheme, false)
+	var buffer bytes.Buffer
+	err := serializer.Encode((*clusterapi.Machine)(status), &buffer)
+	if err != nil {
+		return nil, fmt.Errorf("encoding failure: %v", err)
+	}
+
+	if machine.ObjectMeta.Annotations == nil {
+		machine.ObjectMeta.Annotations = make(map[string]string)
+	}
+	machine.ObjectMeta.Annotations[InstanceStatusAnnotationKey] = buffer.String()
+	return machine, nil
+}
+
+func GetMachineInstanceStatus(machine *clusterapi.Machine) (instanceStatus, error) {
+	if machine.ObjectMeta.Annotations == nil {
+		// No state
+		return nil, nil
+	}
+
+	a := machine.ObjectMeta.Annotations[InstanceStatusAnnotationKey]
+	if a == "" {
+		// No state
+		return nil, nil
+	}
+
+	serializer := json.NewSerializer(json.DefaultMetaFactory, api.Scheme, api.Scheme, false)
+	var status clusterapi.Machine
+	_, _, err := serializer.Decode([]byte(a), &schema.GroupVersionKind{Group: "", Version: "cluster.k8s.io/v1alpha1", Kind: "Machine"}, &status)
+	if err != nil {
+		return nil, fmt.Errorf("decoding failure: %v", err)
+	}
+	return instanceStatus(&status), nil
 }
