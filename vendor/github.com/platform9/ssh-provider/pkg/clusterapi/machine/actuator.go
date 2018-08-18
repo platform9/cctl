@@ -202,6 +202,14 @@ func (a *Actuator) Update(cluster *clusterv1.Cluster, goalMachine *clusterv1.Mac
 	if err != nil {
 		return fmt.Errorf("unable to get current machine from annotation %v", err)
 	}
+	requiresUpdate, err := requiresUpdate(goalMachine, currentMachine)
+	if err != nil {
+		return fmt.Errorf("unable to compare goal and current machines: %v", err)
+	}
+	if !requiresUpdate {
+		log.Println("Current machine is already at required versions")
+		return nil
+	}
 	if err := a.Delete(cluster, currentMachine); err != nil {
 		return fmt.Errorf("unable to delete machine %v", err)
 	}
@@ -210,4 +218,22 @@ func (a *Actuator) Update(cluster *clusterv1.Cluster, goalMachine *clusterv1.Mac
 
 func (a *Actuator) Exists(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (bool, error) {
 	return false, nil
+}
+
+// The two machines differ in a way that requires an update
+func requiresUpdate(a *clusterv1.Machine, b *clusterv1.Machine) (bool, error) {
+	// Do not want status changes. Do want changes that impact machine provisioning
+	aSpec, err := controller.GetMachineSpec(*a)
+	if err != nil {
+		return false, fmt.Errorf("unable to decode machine spec: %v", err)
+	}
+	bSpec, err := controller.GetMachineSpec(*b)
+	if err != nil {
+		return false, fmt.Errorf("unable to decode machine spec: %v", err)
+	}
+	return (aSpec.ComponentVersions.CNIVersion != bSpec.ComponentVersions.CNIVersion ||
+		aSpec.ComponentVersions.EtcdVersion != bSpec.ComponentVersions.EtcdVersion ||
+		aSpec.ComponentVersions.FlannelVersion != bSpec.ComponentVersions.FlannelVersion ||
+		aSpec.ComponentVersions.KeepalivedVersion != bSpec.ComponentVersions.KeepalivedVersion ||
+		aSpec.ComponentVersions.KubernetesVersion != bSpec.ComponentVersions.KubernetesVersion), nil
 }

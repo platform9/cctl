@@ -497,7 +497,7 @@ func drainAndDeleteNodeForMachine(targetMachine *clusterv1.Machine, targetProvis
 	if err != nil {
 		return fmt.Errorf("unable to create machine client for machine %q: %v", targetMachine.Name, err)
 	}
-	nodeName, err := getNodeName(targetMachine.Name, targetMachineClient)
+	nodeName, err := nodeNameForMachine(targetMachine.Name, targetMachineClient)
 	if err != nil {
 		return fmt.Errorf("unable to get node name: %v", err)
 	}
@@ -606,9 +606,28 @@ func isUpgradeRequired(old *spv1.MachineComponentVersions, cur *spv1.MachineComp
 
 type instanceStatus *clusterv1.Machine
 
+func getGoalMachine(currentMachine *clusterv1.Machine) (*clusterv1.Machine, error) {
+	// Prepare goal machine object using current machine
+	goalMachine := currentMachine.DeepCopy()
+	goalMachineSpec, err := sputil.GetMachineSpec(*goalMachine)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to decode machine %q spec: %v", goalMachine.Name, err)
+	}
+	goalMachineSpec.ComponentVersions = getGoalComponentVersions()
+	sputil.PutMachineSpec(*goalMachineSpec, goalMachine)
+	// Add current machine as goal machine's annotation
+	if currentMachine.ObjectMeta.Annotations == nil {
+		currentMachine.ObjectMeta.Annotations = make(map[string]string)
+	}
+	if _, err := sputil.PutMachineInstanceStatus(goalMachine, currentMachine); err != nil {
+		return nil, fmt.Errorf("Unable to set machine instance status %v", err)
+	}
+	return goalMachine, nil
+}
+
 func upgradeMachine(ip string) {
 	log.Printf("Upgrading machine %s\n", ip)
-	//Get the current machine
+	// Get the current machine
 	currentMachine, err := state.ClusterClient.ClusterV1alpha1().
 		Machines(common.DefaultNamespace).
 		Get(ip, metav1.GetOptions{})
@@ -623,7 +642,7 @@ func upgradeMachine(ip string) {
 		ProvisionedMachines(common.DefaultNamespace).
 		Get(currentMachineSpec.ProvisionedMachineName, metav1.GetOptions{})
 
-	//Check if upgrade is required
+	// Check if upgrade is required
 	goalComponentVersions := getGoalComponentVersions()
 	upgradeRequired, upgrade := isUpgradeRequired(currentMachineSpec.ComponentVersions, goalComponentVersions)
 	if !upgradeRequired {
@@ -639,8 +658,14 @@ func upgradeMachine(ip string) {
 		if err != nil {
 			log.Fatalf("unable to create machine client for machine %q: %v", currentMachine.Name, err)
 		}
+		// Prepare goal machine using current machine
+		goalMachine, err := getGoalMachine(currentMachine)
+		if err != nil {
+			log.Fatalf("Unable to create goal machine object: %v", err)
+		}
+
 		// Drain current node
-		nodeName, err := getNodeName(currentMachine.Name, targetMachineClient)
+		nodeName, err := nodeNameForMachine(currentMachine.Name, targetMachineClient)
 		if err != nil {
 			log.Fatalf("Unable to get node name for machine %s: %v", currentMachine.Name, err)
 		}
@@ -648,24 +673,7 @@ func upgradeMachine(ip string) {
 			log.Fatalf("Unable to drain the node %s: %v", nodeName, err)
 		}
 
-		//Prepare goal machine object using current machine
-		goalMachine := currentMachine.DeepCopy()
-		goalMachineSpec, err := sputil.GetMachineSpec(*goalMachine)
-		if err != nil {
-			log.Fatalf("Unable to decode machine %q spec: %v", goalMachine.Name, err)
-		}
-		goalMachineSpec.ComponentVersions = goalComponentVersions
-		sputil.PutMachineSpec(*goalMachineSpec, goalMachine)
-
-		//Add current machine as goal machine's annotation
-		if currentMachine.ObjectMeta.Annotations == nil {
-			currentMachine.ObjectMeta.Annotations = make(map[string]string)
-		}
-		if _, err := sputil.SetMachineInstanceStatus(goalMachine, currentMachine); err != nil {
-			log.Fatalf("Unable to set machine instance status %v", err)
-		}
-
-		//Instantiate actuator
+		// Instantiate actuator
 		machineClientBuilder := sshmachine.NewClient
 		insecureIgnoreHostKey := false
 		if len(currentProvisionedMachine.Spec.SSHConfig.PublicKeys) == 0 {
@@ -680,8 +688,8 @@ func upgradeMachine(ip string) {
 			insecureIgnoreHostKey,
 		)
 
-		//If goal machine is a node we would have to update the token
-		//as current token might have expired
+		// If goal machine is a node we would have to update the token
+		// as current token might have expired
 		var masterMachine *clusterv1.Machine
 		var masterProvisionedMachine *spv1.ProvisionedMachine
 		if clusterutil.RoleContains(clustercommon.NodeRole, goalMachine.Spec.Roles) {
@@ -695,7 +703,7 @@ func upgradeMachine(ip string) {
 			}
 		}
 
-		//Call actuator's update
+		// Call actuator's update
 		cluster, err := state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).Get(common.DefaultClusterName, metav1.GetOptions{})
 		if err != nil {
 			log.Fatalf("Unable to get cluster %s: %v", common.DefaultClusterName, err)
@@ -704,12 +712,12 @@ func upgradeMachine(ip string) {
 		if err != nil {
 			log.Fatalf("Unable to get machine status: %v", err)
 		}
-		//We are deleting etcd member prior to actual delete from actuator
-		//this is still valid as delete only needs memberid (available in machine status)
-		//if delete called in actuator update succeeds this would allow us to pass correct cluster state to create
-		//if delete called in actuator update fails this state would never get persisted
+		// We are deleting etcd member prior to actual delete from actuator
+		// this is still valid as delete only needs memberid (available in machine status)
+		// if delete called in actuator update succeeds this would allow us to pass correct cluster state to create
+		// if delete called in actuator update fails this state would never get persisted
 		if clusterutil.RoleContains(clustercommon.MasterRole, goalMachine.Spec.Roles) {
-			if err := deleteEtcdMemberFromClusterStatus(cluster, currentMachineStatus); err != nil {
+			if err := removeClusterEtcdMember(*currentMachineStatus.EtcdMember, cluster); err != nil {
 				log.Fatalf("Unable to delete etcd member from cluster status")
 			}
 		}
@@ -721,7 +729,7 @@ func upgradeMachine(ip string) {
 			log.Fatalf("Unable to get machine status: %v", err)
 		}
 		if clusterutil.RoleContains(clustercommon.MasterRole, goalMachine.Spec.Roles) {
-			if err := addEtcdMemberToClusterStatus(cluster, goalMachineStatus); err != nil {
+			if err := insertClusterEtcdMember(*goalMachineStatus.EtcdMember, cluster); err != nil {
 				log.Fatalf("Unable to add etcd member from cluster status")
 			}
 		}
@@ -763,7 +771,7 @@ func upgradeMachine(ip string) {
 		log.Fatalf("Unable to sync on-disk state: %v", err)
 	}
 }
-func getNodeName(machineName string, machineClient sshmachine.Client) (string, error) {
+func nodeNameForMachine(machineName string, machineClient sshmachine.Client) (string, error) {
 	log.Printf("Reading system UUID of machine %q", machineName)
 	cmd := fmt.Sprintf("cat %s", common.SystemUUIDFile)
 	stdOut, stdErr, err := machineClient.RunCommand(cmd)

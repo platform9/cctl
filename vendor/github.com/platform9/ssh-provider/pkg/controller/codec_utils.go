@@ -214,7 +214,7 @@ func ClusterAPIProviderConfigFromMachineSpec(machineSpec *sshprovider.MachineSpe
 	}, nil
 }
 
-func SetMachineInstanceStatus(machine *clusterapi.Machine, status instanceStatus) (*clusterapi.Machine, error) {
+func PutMachineInstanceStatus(machine *clusterapi.Machine, status instanceStatus) (*clusterapi.Machine, error) {
 	status.ObjectMeta.Annotations[InstanceStatusAnnotationKey] = ""
 
 	serializer := json.NewSerializer(json.DefaultMetaFactory, api.Scheme, api.Scheme, false)
