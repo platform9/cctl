@@ -10,8 +10,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/coreos/go-semver/semver"
+
 	"github.com/platform9/ssh-provider/pkg/controller"
 	"github.com/platform9/ssh-provider/pkg/machine"
+	semverutil "github.com/platform9/ssh-provider/pkg/util/semver"
 
 	"k8s.io/client-go/kubernetes"
 
@@ -51,14 +54,8 @@ func NewActuator(kubeClient kubernetes.Interface, clusterClient clusterclient.In
 	}
 }
 
-//trimCommitFromVersion removes commit from input version. Version could
-//include commit,if shas are different for last tag and last commit
-func trimCommitFromVersion(version string) (string, error) {
-	split := strings.Split(version, ".")
-	if len(split) < 3 {
-		return "", fmt.Errorf("unable to parse version of %s", version)
-	}
-	return fmt.Sprintf("%s.%s.%s", split[0], split[1], split[2]), nil
+func trimVFromVersion(version string) string {
+	return strings.TrimPrefix(version, "v")
 }
 
 //installEtcdadm installs etcdadm on the machine
@@ -71,40 +68,52 @@ func installNodeadm(version string, machineClient machine.Client) error {
 	return installComponent(NodeadmPath, version, "nodeadm", machineClient)
 }
 
-func installComponent(componentInstallPath, expectedVersion, componentName string, machineClient machine.Client) error {
+func installComponent(componentInstallPath, desiredVersion, componentName string, machineClient machine.Client) error {
+	log.Printf("Installing %q.", componentName)
+
+	log.Printf("Checking %q desired version.", componentName)
+	parsedDesiredVersion, err := semver.NewVersion(trimVFromVersion(desiredVersion))
+	if err != nil {
+		return fmt.Errorf("unable to parse %q desired version %q: %v", componentName, desiredVersion, err)
+	}
+
 	exists, err := machineClient.Exists(componentInstallPath)
 	if err != nil {
-		return fmt.Errorf("unable to check if %s already exists: %v", componentInstallPath, err)
+		return fmt.Errorf("unable to check if %q installed at %q: %v", componentName, componentInstallPath, err)
 	}
 	if exists {
-		existingVersionBytes, _, err := machineClient.RunCommand(fmt.Sprintf("%s version --short", componentInstallPath))
+		log.Printf("%q is already installed. Checking version.", componentName)
+		installedVersionBytes, _, err := machineClient.RunCommand(fmt.Sprintf("%s version --short", componentInstallPath))
 		if err != nil {
-			return fmt.Errorf("unable to check version of %s: %v", componentInstallPath, err)
+			return fmt.Errorf("unable to check %q installed version: %v", componentName, err)
 		}
-		existingVersion, err := trimCommitFromVersion(strings.TrimSpace(string(existingVersionBytes)))
+		installedVersion := trimVFromVersion(strings.TrimSpace(string(installedVersionBytes)))
+		parsedInstalledVersion, err := semver.NewVersion(installedVersion)
 		if err != nil {
-			return fmt.Errorf("unable to get scrubbed version: %v", err)
+			return fmt.Errorf("unable to parse %q installed version %q: %v", componentName, installedVersion, err)
 		}
-		log.Printf("Doing version check for %s existing version %s expected version %s", componentName, existingVersion, expectedVersion)
-		if existingVersion == expectedVersion {
-			log.Printf("Found expected version for %s", componentName)
+		log.Printf("Found %q version %q.", componentName, parsedInstalledVersion)
+		if semverutil.EqualMajorMinorPatchVersions(*parsedDesiredVersion, *parsedInstalledVersion) {
+			log.Printf("Using %q that is already installed. The installed and desired versions match on major.minor.patch.", componentName)
 			return nil
 		}
 	}
-	log.Printf("Looking for expected version %s for %s in cache", expectedVersion, componentName)
-	componentCachePath := filepath.Join(CachePath, componentName, expectedVersion, componentName)
+
+	componentCachePath := filepath.Join(CachePath, componentName, desiredVersion, componentName)
+	log.Printf("Checking for %q version %q in the cache %q.", componentName, desiredVersion, componentCachePath)
 	exists, err = machineClient.Exists(componentCachePath)
 	if err != nil {
-		return fmt.Errorf("unable to check if %s already exists: %v", componentCachePath, err)
+		return fmt.Errorf("unable to check if %q exists: %v", componentCachePath, err)
 	}
-	if exists {
-		log.Printf("Installing %s binary from %s", componentName, componentCachePath)
-		machineClient.CopyFile(componentCachePath, componentInstallPath)
-		return nil
+	if !exists {
+		//TODO(puneet) Try download from a hosted location
+		return fmt.Errorf("unable to find %q in the cache %q", componentName, componentCachePath)
 	}
-	//TODO(puneet) Try download from a hosted location
-	return fmt.Errorf("unable to copy component binary from %s to %s, source exists %t", componentCachePath, componentInstallPath, exists)
-
+	log.Printf("Installing %q version %q from cache %q", componentName, desiredVersion, componentCachePath)
+	if err := machineClient.CopyFile(componentCachePath, componentInstallPath); err != nil {
+		return fmt.Errorf("unable to copy file from %q to %q: %v", componentCachePath, componentInstallPath, err)
+	}
+	return nil
 }
 
 func (a *Actuator) Create(cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {

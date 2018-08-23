@@ -338,9 +338,10 @@
     "pkg/controller/sharedinformers",
     "pkg/machine",
     "pkg/nodeadm",
+    "pkg/util/semver",
     "pkg/util/sets"
   ]
-  revision = "ea4c5841e152d991f75a1e09660614bdfb6c92e3"
+  revision = "182cafc5a455e2150c99c01f22f1c77d39af4171"
 
 [[projects]]
   name = "github.com/prometheus/client_golang"
