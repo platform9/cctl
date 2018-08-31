@@ -7,8 +7,10 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"text/template"
 
+	"github.com/coreos/go-semver/semver"
 	"github.com/ghodss/yaml"
 
 	corev1 "k8s.io/api/core/v1"
@@ -401,12 +403,92 @@ var clusterCmdGet = &cobra.Command{
 	},
 }
 
+func createLocalCopyOfAdminKubeConfig() (string, error) {
+	masterMachine, masterProvisionedMachine, err := masterMachineAndProvisionedMachine()
+	if err != nil {
+		return "", fmt.Errorf("unable to get a master machine and provisioned machine: %v", err)
+	}
+	bytes, err := adminKubeconfigFromMachine(masterMachine, masterProvisionedMachine)
+	if err != nil {
+		return "", fmt.Errorf("unable to read kubeconfig file from master: %v", err)
+	}
+	tmpKubeConfig, err := ioutil.TempFile("", "kubeconfig")
+	if err != nil {
+		return "", fmt.Errorf("unable to create temporary file : %v", err)
+	}
+	err = ioutil.WriteFile(tmpKubeConfig.Name(), bytes, os.FileMode(os.O_RDONLY))
+	if err != nil {
+		return "", fmt.Errorf("unable to write kubeconfig to file : %v", err)
+	}
+	return tmpKubeConfig.Name(), nil
+}
+
+func checkClusterHealth() error {
+	kubeconfig, err := createLocalCopyOfAdminKubeConfig()
+	defer os.Remove(kubeconfig)
+	if err != nil {
+		return fmt.Errorf("unable to create local copy of kubeconfig : %v", err)
+	}
+	log.Print("Checking if all masters are in ready state")
+	err = common.MasterNodesReady(kubeconfig)
+	if err != nil {
+		return err
+	}
+	log.Print("Checking if all control plane pods are in ready state")
+	err = common.ControlPlaneReady(kubeconfig)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func trimVFromVersion(version string) string {
+	return strings.TrimPrefix(version, "v")
+}
+
+func checkVersionSkew() error {
+	machines, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).List(metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("unable to get list of machines in the cluster")
+	}
+	//TODO(puneet) doing this check for every machine seems expensive
+	//should we have a set of versions at cluster level as well?
+	for _, machine := range machines.Items {
+		machineSpec, err := sputil.GetMachineSpec(machine)
+		if err != nil {
+			return fmt.Errorf("unable to decode machine spec: %v", err)
+		}
+		machineK8sVersion, err := semver.NewVersion(machineSpec.ComponentVersions.KubernetesVersion)
+		if err != nil {
+			return fmt.Errorf("unable to parse kubernetes version for machine %s", machine.Name)
+		}
+		//minimum K8s version that we can upgrade from
+		minimumK8sVersion, err := semver.NewVersion(trimVFromVersion(common.MinimumControlPlaneVersion))
+		if err != nil {
+			return fmt.Errorf("unable to parse kubernetes version %s", minimumK8sVersion)
+		}
+		if common.CompareMajorMinorVersions(*machineK8sVersion, *minimumK8sVersion) < 0 {
+			return fmt.Errorf("version skew check failed for machine %s, kubernetes version on the machine is %s minimum supported version for upgrade is %s", machine.Name, machineK8sVersion, minimumK8sVersion)
+		}
+	}
+	return nil
+}
+
 var clusterCmdUpgrade = &cobra.Command{
 	Use:   "cluster",
 	Short: "Upgrade the cluster",
 	Run: func(cmd *cobra.Command, args []string) {
-		// Stub code
-		fmt.Println("Running Upgrade cluster")
+		log.Print("Running preflight checks for cluster upgrade")
+		err := checkVersionSkew()
+		if err != nil {
+			log.Fatalf("Preflight check failed with error: %v", err)
+		}
+		err = checkClusterHealth()
+		if err != nil {
+			log.Fatalf("Preflight check failed with error: %v", err)
+		}
+		log.Print("Preflight check passed. Continuing with cluster upgrade")
+		//TODO (puneet) add support for upgrade
 	},
 }
 
@@ -422,8 +504,8 @@ func init() {
 	clusterCmdCreate.Flags().String("etcd-ca-key", "", "The etcd CA certificate key.")
 	clusterCmdCreate.Flags().String("front-proxy-ca-cert", "", "The front proxy CA certificate. Used to verify client certificates on incoming requests.")
 	clusterCmdCreate.Flags().String("front-proxy-ca-key", "", "The front proxy CA certificate key.")
-	clusterCmdCreate.Flags().String("saPrivateKey", "", "Location of file containing private key used for sigining service account tokens")
-	clusterCmdCreate.Flags().String("saPublicKey", "", "Location of file containing public key used for sigining service account tokens")
+	clusterCmdCreate.Flags().String("saPrivateKey", "", "Location of file containing private key used for signing service account tokens")
+	clusterCmdCreate.Flags().String("saPublicKey", "", "Location of file containing public key used for signing service account tokens")
 	clusterCmdCreate.MarkFlagRequired("vip")
 	clusterCmdCreate.MarkFlagRequired("routerID")
 	//clusterCmdCreate.Flags().String("version", "1.10.2", "Kubernetes version")
