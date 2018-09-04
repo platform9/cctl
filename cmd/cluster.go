@@ -412,7 +412,7 @@ func createLocalCopyOfAdminKubeConfig() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("unable to read kubeconfig file from master: %v", err)
 	}
-	tmpKubeConfig, err := ioutil.TempFile("", "kubeconfig")
+	tmpKubeConfig, err := ioutil.TempFile("", common.TmpKubeConfigNamePrefix)
 	if err != nil {
 		return "", fmt.Errorf("unable to create temporary file : %v", err)
 	}
@@ -451,8 +451,8 @@ func checkVersionSkew() error {
 	if err != nil {
 		return fmt.Errorf("unable to get list of machines in the cluster")
 	}
-	//TODO(puneet) doing this check for every machine seems expensive
-	//should we have a set of versions at cluster level as well?
+	// TODO(puneet) doing this check for every machine seems expensive
+	// should we have a set of versions at cluster level as well?
 	for _, machine := range machines.Items {
 		machineSpec, err := sputil.GetMachineSpec(machine)
 		if err != nil {
@@ -462,13 +462,13 @@ func checkVersionSkew() error {
 		if err != nil {
 			return fmt.Errorf("unable to parse kubernetes version for machine %s", machine.Name)
 		}
-		//minimum K8s version that we can upgrade from
+		// minimum K8s version that we can upgrade from
 		minimumK8sVersion, err := semver.NewVersion(trimVFromVersion(common.MinimumControlPlaneVersion))
 		if err != nil {
 			return fmt.Errorf("unable to parse kubernetes version %s", minimumK8sVersion)
 		}
 		if common.CompareMajorMinorVersions(*machineK8sVersion, *minimumK8sVersion) < 0 {
-			return fmt.Errorf("version skew check failed for machine %s, kubernetes version on the machine is %s minimum supported version for upgrade is %s", machine.Name, machineK8sVersion, minimumK8sVersion)
+			return fmt.Errorf("cannot upgrade machine %s. Minimum supported version for upgrade %s. Machine is currently at %s", machine.Name, minimumK8sVersion, machineK8sVersion)
 		}
 	}
 	return nil
@@ -478,17 +478,17 @@ var clusterCmdUpgrade = &cobra.Command{
 	Use:   "cluster",
 	Short: "Upgrade the cluster",
 	Run: func(cmd *cobra.Command, args []string) {
-		log.Print("Running preflight checks for cluster upgrade")
+		log.Print("[pre-flight] Running preflight checks for cluster upgrade")
 		err := checkVersionSkew()
 		if err != nil {
-			log.Fatalf("Preflight check failed with error: %v", err)
+			log.Fatalf("[pre-flight] Preflight check failed with error: %v", err)
 		}
 		err = checkClusterHealth()
 		if err != nil {
-			log.Fatalf("Preflight check failed with error: %v", err)
+			log.Fatalf("[pre-flight] Preflight check failed with error: %v", err)
 		}
-		log.Print("Preflight check passed. Continuing with cluster upgrade")
-		//TODO (puneet) add support for upgrade
+		log.Print("[pre-flight] Preflight check passed. Continuing with cluster upgrade")
+		// TODO (puneet) add support for upgrade
 	},
 }
 

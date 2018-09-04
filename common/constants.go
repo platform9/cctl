@@ -38,6 +38,7 @@ const (
 	KubeScheduler                      = "kube-scheduler"
 	KubeSystemNamespace                = "kube-system"
 	MinimumControlPlaneVersion         = "v1.10.0"
+	TmpKubeConfigNamePrefix            = "kubeconfig"
 	ClusterV1PrintTemplate             = `Cluster Information
 ------- ------------
 Cluster Name       : {{ .Cluster.ObjectMeta.Name}}
