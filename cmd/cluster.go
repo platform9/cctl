@@ -24,7 +24,9 @@ import (
 	sputil "github.com/platform9/ssh-provider/pkg/controller"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clustercommon "sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
+	clusterutil "sigs.k8s.io/cluster-api/pkg/util"
 )
 
 var forceDelete bool
@@ -473,6 +475,35 @@ func checkVersionSkew() error {
 	return nil
 }
 
+func filter(input []clusterv1.Machine, f func(clusterv1.Machine) bool) []clusterv1.Machine {
+	filtered := make([]clusterv1.Machine, 0)
+	for _, elem := range input {
+		if f(elem) {
+			filtered = append(filtered, elem)
+		}
+	}
+	return filtered
+}
+
+func upgradeMachines(machines []clusterv1.Machine) error {
+	for _, machine := range machines {
+		machineSpec, err := sputil.GetMachineSpec(machine)
+		if err != nil {
+			return fmt.Errorf("unable to decode machine spec: %v", err)
+		}
+		currentProvisionedMachine, err := state.SPClient.SshproviderV1alpha1().
+			ProvisionedMachines(common.DefaultNamespace).
+			Get(machineSpec.ProvisionedMachineName, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("unable to decode provisioned machine spec: %v", err)
+		}
+		if err = upgradeMachine(currentProvisionedMachine.Spec.SSHConfig.Host); err != nil {
+			return fmt.Errorf("Cluster upgrade failed with error: %v", err)
+		}
+	}
+	return nil
+}
+
 var clusterCmdUpgrade = &cobra.Command{
 	Use:   "cluster",
 	Short: "Upgrade the cluster",
@@ -484,8 +515,27 @@ var clusterCmdUpgrade = &cobra.Command{
 		if err := checkClusterHealth(); err != nil {
 			log.Fatalf("[pre-flight] Preflight check failed with error: %v", err)
 		}
-		log.Print("[pre-flight] Preflight check passed. Continuing with cluster upgrade")
-		// TODO (puneet) add support for upgrade
+		log.Print("[pre-flight] Preflight check passed")
+		log.Print("Starting cluster upgrade")
+		machines, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).List(metav1.ListOptions{})
+		if err != nil {
+			log.Fatalf("unable to get list of machines in the cluster")
+		}
+		masters := filter(machines.Items, func(m clusterv1.Machine) bool {
+			return clusterutil.RoleContains(clustercommon.MasterRole, m.Spec.Roles)
+		})
+		nodes := filter(machines.Items, func(m clusterv1.Machine) bool {
+			return clusterutil.RoleContains(clustercommon.NodeRole, m.Spec.Roles)
+		})
+		log.Printf("Upgrading cluster masters")
+		if err = upgradeMachines(masters); err != nil {
+			log.Fatalf("Cluster upgrade failed with error: %v", err)
+		}
+		log.Printf("Upgrading cluster nodes")
+		if err = upgradeMachines(nodes); err != nil {
+			log.Fatalf("Cluster upgrade failed with error: %v", err)
+		}
+		log.Printf("Cluster upgraded successfully")
 	},
 }
 
