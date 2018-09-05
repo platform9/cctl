@@ -632,7 +632,7 @@ func upgradeMachine(ip string) {
 		Machines(common.DefaultNamespace).
 		Get(ip, metav1.GetOptions{})
 	if err != nil {
-		log.Fatalf("Unable to get machine %q spec: %v", currentMachine.Name, err)
+		log.Fatalf("Unable to get machine %q: %v", ip, err)
 	}
 	currentMachineSpec, err := sputil.GetMachineSpec(*currentMachine)
 	if err != nil {
