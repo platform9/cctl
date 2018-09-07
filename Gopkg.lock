@@ -341,7 +341,7 @@
     "pkg/util/semver",
     "pkg/util/sets"
   ]
-  revision = "182cafc5a455e2150c99c01f22f1c77d39af4171"
+  revision = "b3006210e9073b9c8733a678f3ba9163fbe253f7"
 
 [[projects]]
   name = "github.com/prometheus/client_golang"
