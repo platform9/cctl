@@ -18,6 +18,7 @@ import (
 	certutil "k8s.io/client-go/util/cert"
 
 	"github.com/platform9/cctl/common"
+	"github.com/platform9/cctl/pkg/util/clusterapi"
 	"github.com/platform9/cctl/semverutil"
 
 	spv1 "github.com/platform9/ssh-provider/pkg/apis/sshprovider/v1alpha1"
@@ -26,7 +27,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clustercommon "sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
-	clusterutil "sigs.k8s.io/cluster-api/pkg/util"
 )
 
 var forceDelete bool
@@ -475,16 +475,6 @@ func checkVersionSkew() error {
 	return nil
 }
 
-func filter(input []clusterv1.Machine, f func(clusterv1.Machine) bool) []clusterv1.Machine {
-	filtered := make([]clusterv1.Machine, 0)
-	for _, elem := range input {
-		if f(elem) {
-			filtered = append(filtered, elem)
-		}
-	}
-	return filtered
-}
-
 func upgradeMachines(machines []clusterv1.Machine) error {
 	for _, machine := range machines {
 		machineSpec, err := sputil.GetMachineSpec(machine)
@@ -521,12 +511,8 @@ var clusterCmdUpgrade = &cobra.Command{
 		if err != nil {
 			log.Fatalf("unable to get list of machines in the cluster")
 		}
-		masters := filter(machines.Items, func(m clusterv1.Machine) bool {
-			return clusterutil.RoleContains(clustercommon.MasterRole, m.Spec.Roles)
-		})
-		nodes := filter(machines.Items, func(m clusterv1.Machine) bool {
-			return clusterutil.RoleContains(clustercommon.NodeRole, m.Spec.Roles)
-		})
+		masters := clusterapi.MachinesWithRole(machines.Items, clustercommon.MasterRole)
+		nodes := clusterapi.MachinesWithRole(machines.Items, clustercommon.NodeRole)
 		log.Printf("Upgrading cluster masters")
 		if err = upgradeMachines(masters); err != nil {
 			log.Fatalf("Cluster upgrade failed with error: %v", err)
