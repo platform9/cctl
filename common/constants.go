@@ -33,6 +33,12 @@ const (
 	DockerKubeAPIServerNameFilter      = "name=k8s_kube-apiserver.*kube-system.*"
 	DockerRunningStatusFilter          = "status=running"
 	InstanceStatusAnnotationKey        = "instance-status"
+	KubeAPIServer                      = "kube-apiserver"
+	KubeControllerManager              = "kube-controller-manager"
+	KubeScheduler                      = "kube-scheduler"
+	KubeSystemNamespace                = "kube-system"
+	MinimumControlPlaneVersion         = "v1.10.0"
+	TmpKubeConfigNamePrefix            = "kubeconfig"
 	ClusterV1PrintTemplate             = `Cluster Information
 ------- ------------
 Cluster Name       : {{ .Cluster.ObjectMeta.Name}}
@@ -52,3 +58,5 @@ Machine IP             Creation Timestamp                      Role
 {{ end }}
 `
 )
+
+var MasterComponents = []string{KubeAPIServer, KubeControllerManager, KubeScheduler}

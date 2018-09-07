@@ -853,9 +853,16 @@
 
 [[projects]]
   name = "k8s.io/kubernetes"
-  packages = ["pkg/version"]
-  revision = "b1b29978270dc22fecc592ac55d903350454310a"
-  version = "v1.11.1"
+  packages = [
+    "cmd/kubeadm/app/constants",
+    "pkg/apis/core",
+    "pkg/registry/core/service/allocator",
+    "pkg/registry/core/service/ipallocator",
+    "pkg/util/version",
+    "pkg/version"
+  ]
+  revision = "098570796b32895c38a9a1c9286425fb1ececa18"
+  version = "v1.9.10"
 
 [[projects]]
   branch = "master"
@@ -878,6 +885,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "3f54d53e018f53d5524351a03b0c609ed967c24fc39a894f5e94c0303c9a7696"
+  inputs-digest = "895bf786d041812a488962ce5e84857c0801acf42cc0bbbb606228e004e6ed37"
   solver-name = "gps-cdcl"
   solver-version = 1
