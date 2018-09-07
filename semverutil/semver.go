@@ -1,4 +1,4 @@
-package common
+package semverutil
 
 import (
 	"github.com/coreos/go-semver/semver"

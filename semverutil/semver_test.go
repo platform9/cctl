@@ -1,4 +1,4 @@
-package common
+package semverutil
 
 import (
 	"testing"

@@ -18,6 +18,7 @@ import (
 	certutil "k8s.io/client-go/util/cert"
 
 	"github.com/platform9/cctl/common"
+	"github.com/platform9/cctl/semverutil"
 
 	spv1 "github.com/platform9/ssh-provider/pkg/apis/sshprovider/v1alpha1"
 	sputil "github.com/platform9/ssh-provider/pkg/controller"
@@ -430,13 +431,11 @@ func checkClusterHealth() error {
 		return fmt.Errorf("unable to create local copy of kubeconfig : %v", err)
 	}
 	log.Print("Checking if all masters are in ready state")
-	err = common.MasterNodesReady(kubeconfig)
-	if err != nil {
+	if err = common.MasterNodesReady(kubeconfig); err != nil {
 		return err
 	}
 	log.Print("Checking if all control plane pods are in ready state")
-	err = common.ControlPlaneReady(kubeconfig)
-	if err != nil {
+	if err = common.ControlPlaneReady(kubeconfig); err != nil {
 		return err
 	}
 	return nil
@@ -467,7 +466,7 @@ func checkVersionSkew() error {
 		if err != nil {
 			return fmt.Errorf("unable to parse kubernetes version %s", minimumK8sVersion)
 		}
-		if common.CompareMajorMinorVersions(*machineK8sVersion, *minimumK8sVersion) < 0 {
+		if semverutil.CompareMajorMinorVersions(*machineK8sVersion, *minimumK8sVersion) < 0 {
 			return fmt.Errorf("cannot upgrade machine %s. Minimum supported version for upgrade %s. Machine is currently at %s", machine.Name, minimumK8sVersion, machineK8sVersion)
 		}
 	}
@@ -479,12 +478,10 @@ var clusterCmdUpgrade = &cobra.Command{
 	Short: "Upgrade the cluster",
 	Run: func(cmd *cobra.Command, args []string) {
 		log.Print("[pre-flight] Running preflight checks for cluster upgrade")
-		err := checkVersionSkew()
-		if err != nil {
+		if err := checkVersionSkew(); err != nil {
 			log.Fatalf("[pre-flight] Preflight check failed with error: %v", err)
 		}
-		err = checkClusterHealth()
-		if err != nil {
+		if err := checkClusterHealth(); err != nil {
 			log.Fatalf("[pre-flight] Preflight check failed with error: %v", err)
 		}
 		log.Print("[pre-flight] Preflight check passed. Continuing with cluster upgrade")
