@@ -7,7 +7,7 @@ import (
 
 // MachinesWithRole returns every machine in the list that has the role.
 func MachinesWithRole(machines []clusterv1.Machine, role clustercommon.MachineRole) []clusterv1.Machine {
-	var mwr []clusterv1.Machine
+	mwr := make([]clusterv1.Machine, 0)
 	for _, m := range machines {
 		for _, r := range m.Spec.Roles {
 			if r == role {

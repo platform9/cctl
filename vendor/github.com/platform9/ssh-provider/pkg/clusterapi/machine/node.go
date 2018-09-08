@@ -89,6 +89,14 @@ func deployKubernetesNode(cluster *clusterv1.Cluster, machine *clusterv1.Machine
 }
 
 func (a *Actuator) deleteNode(machine *clusterv1.Machine, machineClient machine.Client) error {
+	machineSpec, err := controller.GetMachineSpec(*machine)
+	if err != nil {
+		return fmt.Errorf("unable to decode spec of machine %q: %v", machine.Name, err)
+	}
+	// Install correct version of nodeadm
+	if err := installNodeadm(machineSpec.ComponentVersions.NodeadmVersion, machineClient); err != nil {
+		return fmt.Errorf("unable to install the correct version of nodeadm: %v", err)
+	}
 	log.Println("resetting kubernetes on node")
 	if err := resetKubernetes(machineClient); err != nil {
 		return fmt.Errorf("unable to reset kubernetes: %v", err)
