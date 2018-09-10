@@ -315,7 +315,6 @@
   version = "v1.8.0"
 
 [[projects]]
-  branch = "master"
   name = "github.com/platform9/ssh-provider"
   packages = [
     "pkg/api",
@@ -341,7 +340,8 @@
     "pkg/util/semver",
     "pkg/util/sets"
   ]
-  revision = "b3006210e9073b9c8733a678f3ba9163fbe253f7"
+  revision = "4a4ac6d8d9c809959f03875ea725d54a57ab16f2"
+  version = "v0.0.4"
 
 [[projects]]
   name = "github.com/prometheus/client_golang"
