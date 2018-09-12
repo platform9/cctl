@@ -39,6 +39,8 @@ const (
 	KubeSystemNamespace                = "kube-system"
 	MinimumControlPlaneVersion         = "v1.10.0"
 	TmpKubeConfigNamePrefix            = "kubeconfig"
+	DefaultAdminConfigSecretName       = "admin-conf"
+	DefaultAdminConfigSecretKey        = "data"
 	ClusterV1PrintTemplate             = `Cluster Information
 ------- ------------
 Cluster Name       : {{ .Cluster.ObjectMeta.Name}}

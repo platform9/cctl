@@ -60,15 +60,57 @@ func updateBootstrapToken(masterMachine *clusterv1.Machine, masterProvisionedMac
 	return nil
 }
 
-func copyAdminConfFromMaster(masterMachine *clusterv1.Machine, masterProvisionedMachine *spv1.ProvisionedMachine,
+func createAdminKubeconfigSecret(machine *clusterv1.Machine, provisionedMachine *spv1.ProvisionedMachine) (*corev1.Secret, error) {
+	adminConfigData, err := adminKubeconfigFromMachine(machine, provisionedMachine)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to get admin.conf data: %v", err)
+	}
+	adminConfigSecret := corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Secret",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              common.DefaultAdminConfigSecretName,
+			Namespace:         common.DefaultNamespace,
+			CreationTimestamp: metav1.Now(),
+		},
+		Data: make(map[string][]byte),
+	}
+	adminConfigSecret.Data[common.DefaultAdminConfigSecretKey] = adminConfigData
+	return &adminConfigSecret, nil
+}
+
+func copyAdminConfigFromSecret(masterMachine *clusterv1.Machine, masterProvisionedMachine *spv1.ProvisionedMachine,
 	newMachine *clusterv1.Machine, newProvisionedMachine *spv1.ProvisionedMachine) error {
 	log.Println("Writing admin kubeconfig to machine")
-	kubeconfig, err := adminKubeconfigFromMachine(masterMachine, masterProvisionedMachine)
+	kubeconfig, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Get(common.DefaultAdminConfigSecretName, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("Unable to get admin kubeconfig from master: %v", err)
+		return fmt.Errorf("Unable to get admin kubeconfig from secret: %v", err)
 	}
-	if err := writeAdminKubeconfigToMachine(kubeconfig, newMachine, newProvisionedMachine); err != nil {
+	if err := writeAdminKubeconfigToMachine(kubeconfig.Data[common.DefaultAdminConfigSecretKey], newMachine, newProvisionedMachine); err != nil {
 		return fmt.Errorf("Unable to write admin kubeconfig to machine: %v", err)
+	}
+	return nil
+}
+
+func createAdminKubeConfigSecretIfNotPresent() error {
+	machine, provisionedMachine, err := masterMachineAndProvisionedMachine()
+	if err != nil {
+		return fmt.Errorf("unable to get master machine and provisioned machine: %v", err)
+	}
+	if _, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Get(common.DefaultAdminConfigSecretName, metav1.GetOptions{}); err != nil {
+		if apierrors.IsNotFound(err) {
+			adminKubeConfigSecret, err := createAdminKubeconfigSecret(machine, provisionedMachine)
+			if err != nil {
+				return fmt.Errorf("unable to create secret for admin.conf: %v", err)
+			}
+			if _, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Create(adminKubeConfigSecret); err != nil {
+				return fmt.Errorf("unable to create secret for admin.conf: %v", err)
+			}
+		} else {
+			return fmt.Errorf("unable to get secret for admin.conf: %v", err)
+		}
 	}
 	return nil
 }
@@ -149,8 +191,12 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 		log.Fatalf("Unable to create machine: %v", err)
 	}
 
+	if err := createAdminKubeConfigSecretIfNotPresent(); err != nil {
+		log.Fatalf("Unable to create admin.conf secret: %v", err)
+	}
+
 	if clusterutil.RoleContains(clustercommon.NodeRole, newMachine.Spec.Roles) {
-		if err := copyAdminConfFromMaster(masterMachine, masterProvisionedMachine, newMachine, newProvisionedMachine); err != nil {
+		if err := copyAdminConfigFromSecret(masterMachine, masterProvisionedMachine, newMachine, newProvisionedMachine); err != nil {
 			log.Fatalf("Unable to place admin.conf on the node: %v", err)
 		}
 	}
@@ -291,6 +337,9 @@ func deleteMachine(ip string, force bool, skipDrainDelete bool) {
 	} else {
 		deleteMustNotOrphanNodes(targetMachine)
 		if !skipDrainDelete {
+			if err := createAdminKubeConfigSecretIfNotPresent(); err != nil {
+				log.Fatalf("Unable to create admin.conf secret: %v", err)
+			}
 			if err := drainAndDeleteNodeForMachine(targetMachine, targetProvisionedMachine); err != nil {
 				log.Fatalf("Unable to drain and delete cluster node for machine %q: %v", targetMachine.Name, err)
 			}
@@ -654,6 +703,9 @@ func upgradeMachine(ip string) error {
 	if upgrade.KubernetesVersion || upgrade.CNIVersion || upgrade.FlannelVersion ||
 		upgrade.KeepalivedVersion ||
 		upgrade.EtcdVersion {
+		if err := createAdminKubeConfigSecretIfNotPresent(); err != nil {
+			log.Fatalf("Unable to create admin.conf secret: %v", err)
+		}
 		targetMachineClient, err := sshMachineClientFromSSHConfig(currentProvisionedMachine.Spec.SSHConfig)
 		if err != nil {
 			return fmt.Errorf("unable to create machine client for machine %q: %v", currentMachine.Name, err)
@@ -736,7 +788,7 @@ func upgradeMachine(ip string) error {
 
 		//Uncordon upgraded node
 		if clusterutil.RoleContains(clustercommon.NodeRole, goalMachine.Spec.Roles) {
-			if err := copyAdminConfFromMaster(masterMachine, masterProvisionedMachine, goalMachine, currentProvisionedMachine); err != nil {
+			if err := copyAdminConfigFromSecret(masterMachine, masterProvisionedMachine, goalMachine, currentProvisionedMachine); err != nil {
 				return fmt.Errorf("unable to copy admin conf to node: %v", err)
 			}
 		}
