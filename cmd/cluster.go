@@ -351,7 +351,7 @@ var clusterCmdDelete = &cobra.Command{
 
 		if err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Delete(common.DefaultAdminConfigSecretName, &metav1.DeleteOptions{}); err != nil {
 			if !apierrors.IsNotFound(err) {
-				log.Fatalf("Unable to delete admin conf secret: %v", err)
+				log.Fatalf("Unable to delete admin kubeconfig secret: %v", err)
 			}
 		}
 
@@ -415,11 +415,14 @@ var clusterCmdGet = &cobra.Command{
 func createLocalCopyOfAdminKubeConfig() (string, error) {
 	kubeconfig, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Get(common.DefaultAdminConfigSecretName, metav1.GetOptions{})
 	if err != nil {
-		return "", fmt.Errorf("Unable to get admin kubeconfig from secret: %v", err)
+		return "", fmt.Errorf("unable to get admin kubeconfig from secret: %v", err)
 	}
 	tmpKubeConfig, err := ioutil.TempFile("", common.TmpKubeConfigNamePrefix)
 	if err != nil {
 		return "", fmt.Errorf("unable to create temporary file : %v", err)
+	}
+	if len(kubeconfig.Data[common.DefaultAdminConfigSecretKey]) == 0 {
+		return "", fmt.Errorf("unable to find data in admin kubeconfig secret")
 	}
 	err = ioutil.WriteFile(tmpKubeConfig.Name(), kubeconfig.Data[common.DefaultAdminConfigSecretKey], os.FileMode(os.O_RDONLY))
 	if err != nil {
@@ -501,7 +504,7 @@ var clusterCmdUpgrade = &cobra.Command{
 	Short: "Upgrade the cluster",
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := createAdminKubeConfigSecretIfNotPresent(); err != nil {
-			log.Fatalf("Unable to create admin.conf secret: %v", err)
+			log.Fatalf("Unable to create admin kubeconfig secret: %v", err)
 		}
 		log.Print("[pre-flight] Running preflight checks for cluster upgrade")
 		if err := checkVersionSkew(); err != nil {
