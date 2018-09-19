@@ -421,10 +421,14 @@ func createLocalCopyOfAdminKubeConfig() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("unable to create temporary file : %v", err)
 	}
-	if len(kubeconfig.Data[common.DefaultAdminConfigSecretKey]) == 0 {
+	kubeconfigData, ok := kubeconfig.Data[common.DefaultAdminConfigSecretKey]
+	if !ok {
 		return "", fmt.Errorf("unable to find data in admin kubeconfig secret")
 	}
-	err = ioutil.WriteFile(tmpKubeConfig.Name(), kubeconfig.Data[common.DefaultAdminConfigSecretKey], os.FileMode(os.O_RDONLY))
+	if len(kubeconfigData) == 0 {
+		return "", fmt.Errorf("invalid data in admin kubeconfig secret")
+	}
+	err = ioutil.WriteFile(tmpKubeConfig.Name(), kubeconfigData, os.FileMode(os.O_RDONLY))
 	if err != nil {
 		return "", fmt.Errorf("unable to write kubeconfig to file : %v", err)
 	}

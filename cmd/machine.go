@@ -88,7 +88,14 @@ func copyAdminConfigFromSecret(masterMachine *clusterv1.Machine, masterProvision
 	if err != nil {
 		return fmt.Errorf("Unable to get admin kubeconfig from secret: %v", err)
 	}
-	if err := writeAdminKubeconfigToMachine(kubeconfig.Data[common.DefaultAdminConfigSecretKey], newMachine, newProvisionedMachine); err != nil {
+	kubeconfigData, ok := kubeconfig.Data[common.DefaultAdminConfigSecretKey]
+	if !ok {
+		return fmt.Errorf("unable to find data in admin kubeconfig secret")
+	}
+	if len(kubeconfigData) == 0 {
+		return fmt.Errorf("invalid data in admin kubeconfig secret")
+	}
+	if err := writeAdminKubeconfigToMachine(kubeconfigData, newMachine, newProvisionedMachine); err != nil {
 		return fmt.Errorf("Unable to write admin kubeconfig to machine: %v", err)
 	}
 	return nil
