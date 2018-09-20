@@ -68,6 +68,22 @@ type ClusterSpec struct {
 	// specified, the VIP is not created.
 	// +optional
 	VIPConfiguration *VIPConfiguration `json:"vipConfiguration,omitempty"`
+	// ClusterConfig is the set of configurable parameters for the cluster. If not provided
+	// If not provided default values for these parameters are chosen.
+	ClusterConfig *ClusterConfig `json:"clusterConfig,omitempty"`
+}
+
+type ClusterConfig struct {
+	// generic map[string]string types would eventually be replaced by
+	// corresponding structured types as they become available upstream
+	KubeAPIServer         map[string]string       `json:"kubeAPIServer,omitempty"`
+	KubeDNS               map[string]string       `json:"kubeDNS,omitempty"`
+	KubeControllerManager map[string]string       `json:"kubeControllerManager,omitempty"`
+	KubeScheduler         map[string]string       `json:"kubeScheduler,omitempty"`
+	KubeProxy             *KubeProxyConfiguration `json:"kubeProxy,omitempty"`
+	Kubelet               *KubeletConfiguration   `json:"kubelet,omitempty"`
+	NetworkBackend        map[string]string       `json:"networkBackend,omitempty"`
+	KeepAlived            map[string]string       `json:"keepAlived,omitempty"`
 }
 
 // VIPConfiguration specifies the parameters used to provision a virtual IP

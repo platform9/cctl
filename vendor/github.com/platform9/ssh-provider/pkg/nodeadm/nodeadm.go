@@ -12,10 +12,12 @@ type InitConfiguration struct {
 	MasterConfiguration KubeadmInitConfiguration `json:"masterConfiguration,omitempty"`
 	Networking          Networking               `json:"networking,omitempty"`
 	VIPConfiguration    VIPConfiguration         `json:"vipConfiguration,omitempty"`
+	ClusterConfig       spv1.ClusterConfig       `json:"clusterConfiguration,omitempty"`
 }
 
 type JoinConfiguration struct {
-	Networking Networking `json:"networking,omitempty"`
+	Networking    Networking         `json:"networking,omitempty"`
+	ClusterConfig spv1.ClusterConfig `json:"clusterConfiguration,omitempty"`
 }
 
 type VIPConfiguration struct {
@@ -77,7 +79,11 @@ func InitConfigurationForMachine(cluster clusterv1.Cluster, machine clusterv1.Ma
 	cfg.MasterConfiguration.Etcd.CAFile = "/etc/etcd/pki/ca.crt"
 	cfg.MasterConfiguration.Etcd.CertFile = "/etc/etcd/pki/apiserver-etcd-client.crt"
 	cfg.MasterConfiguration.Etcd.KeyFile = "/etc/etcd/pki/apiserver-etcd-client.key"
-
+	if cpc.ClusterConfig != nil {
+		cfg.ClusterConfig = *cpc.ClusterConfig
+	} else {
+		cfg.ClusterConfig = spv1.ClusterConfig{}
+	}
 	// Networking
 	switch len(cluster.Spec.ClusterNetwork.Pods.CIDRBlocks) {
 	case 0:
@@ -110,6 +116,11 @@ func InitConfigurationForMachine(cluster clusterv1.Cluster, machine clusterv1.Ma
 func JoinConfigurationForMachine(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (*JoinConfiguration, error) {
 	cfg := &JoinConfiguration{}
 
+	cpc, err := controller.GetClusterSpec(*cluster)
+	if err != nil {
+		return nil, fmt.Errorf("unable to decode cluster spec: %v", err)
+	}
+
 	// Networking
 	switch len(cluster.Spec.ClusterNetwork.Pods.CIDRBlocks) {
 	case 0:
@@ -128,6 +139,10 @@ func JoinConfigurationForMachine(cluster *clusterv1.Cluster, machine *clusterv1.
 		return nil, fmt.Errorf("cluster %q spec.clusterNetwork.pods.cidrBlocks must contain at most one block", cluster.Name)
 	}
 	cfg.Networking.DNSDomain = cluster.Spec.ClusterNetwork.ServiceDomain
-
+	if cpc.ClusterConfig != nil {
+		cfg.ClusterConfig = *cpc.ClusterConfig
+	} else {
+		cfg.ClusterConfig = spv1.ClusterConfig{}
+	}
 	return cfg, nil
 }
