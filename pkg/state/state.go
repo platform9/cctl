@@ -22,9 +22,14 @@ const (
 	FileMode = 0600
 )
 
+type SchemaVersion int
+
+const Version = SchemaVersion(1)
+
 // State holds all the objects that make up cctl state.State Contains unexported
 // fields.
 type State struct {
+	SchemaVersion SchemaVersion           `json:"schemaVersion"`
 	Filename      string                  `json:"-"`
 	KubeClient    kubernetes.Interface    `json:"-"`
 	ClusterClient clusterclient.Interface `json:"-"`
@@ -40,6 +45,7 @@ type State struct {
 // file.
 func NewWithFile(filename string, kubeClient kubernetes.Interface, clusterClient clusterclient.Interface, spClient spclient.Interface) *State {
 	s := State{
+		SchemaVersion: Version,
 		Filename:      filename,
 		KubeClient:    kubeClient,
 		ClusterClient: clusterClient,
@@ -60,11 +66,12 @@ func (s *State) read() error {
 	}
 	defer file.Close()
 	stateBytes, err := ioutil.ReadAll(file)
-	if err != nil {
-		return fmt.Errorf("unable to read from %q: %v", s.Filename, err)
-	}
 	if err := yaml.Unmarshal(stateBytes, s); err != nil {
 		return fmt.Errorf("unable to unmarshal state from YAML: %v", err)
+	}
+	if s.SchemaVersion != Version {
+		return fmt.Errorf("unexpected state file version. Expecting schemaVersion %v, got %v instead."+
+			" Please update the state file by running cctl with the migrate command", Version, s.SchemaVersion)
 	}
 	return nil
 }
