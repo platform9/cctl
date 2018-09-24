@@ -11,6 +11,9 @@ import (
 var restoreCmd = &cobra.Command{
 	Use:   "restore",
 	Short: "Restore the cctl state and etcd snapshot from an archive.",
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		InitState()
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		archivePath, err := cmd.Flags().GetString("archive")
 		if err != nil {

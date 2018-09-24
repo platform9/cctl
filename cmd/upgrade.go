@@ -11,6 +11,9 @@ var upgradeCmd = &cobra.Command{
 	Use:   "upgrade",
 	Short: "Used to upgrade the cluster",
 	Args:  cobra.MinimumNArgs(1),
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		InitState()
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Upgrade called")
 	},

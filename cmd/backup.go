@@ -11,6 +11,9 @@ import (
 var backupCmd = &cobra.Command{
 	Use:   "backup",
 	Short: "Create an archive with the current cctl state and an etcd snapshot from the cluster.",
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		InitState()
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		archivePath, err := cmd.Flags().GetString("archive")
 		if err != nil {

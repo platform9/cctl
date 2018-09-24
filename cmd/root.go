@@ -18,6 +18,9 @@ var state *cctlstate.State
 
 var rootCmd = &cobra.Command{
 	Use: "cctl",
+	PreRun: func(cmd *cobra.Command, args []string) {
+		InitState()
+	},
 	Long: `Platform9 tool for Kubernetes cluster management.
 This tool lets you create, scale, backup and restore
 your on-premise Kubernetes cluster.`,
@@ -31,24 +34,14 @@ func Execute() {
 }
 
 func init() {
-	cobra.OnInitialize(initState)
 	rootCmd.PersistentFlags().StringVar(&stateFilename, "state", "/etc/cctl-state.yaml", "state file")
-
 }
 
-func initState() {
+func InitState() {
 	kubeClient := kubeclientfake.NewSimpleClientset()
 	clusterClient := clusterclientfake.NewSimpleClientset()
 	spClient := spclientfake.NewSimpleClientset()
 	state = cctlstate.NewWithFile(stateFilename, kubeClient, clusterClient, spClient)
-
-	// We hijack the argument to cctl since initState gets executed at
-	// the root level preRun. Subcommands such as migrate are executed later in the
-	// hierarchy which means that the migrate command isn't visible to cobra until
-	// after initState has finished.
-	if os.Args[1] == "migrate" {
-		Migrate()
-	}
 
 	if err := state.PushToAPIs(); err != nil {
 		log.Fatalf("Unable to sync on-disk state: %v", err)

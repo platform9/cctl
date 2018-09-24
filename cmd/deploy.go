@@ -11,6 +11,9 @@ var deployCmd = &cobra.Command{
 	Use:   "deploy",
 	Short: "Used to deploy app to the cluster",
 	Args:  cobra.MinimumNArgs(1),
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		InitState()
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Deploy called")
 	},

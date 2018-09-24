@@ -9,6 +9,10 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+
+	spclientfake "github.com/platform9/ssh-provider/pkg/client/clientset_generated/clientset/fake"
+	kubeclientfake "k8s.io/client-go/kubernetes/fake"
+	clusterclientfake "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/fake"
 )
 
 // upgradeCmd represents the upgrade command
@@ -16,7 +20,7 @@ var migrateCmd = &cobra.Command{
 	Use:   "migrate",
 	Short: "Migrate state file to a newer schema",
 	Run: func(cmd *cobra.Command, args []string) {
-		// This is a noop. The actual command is called in root.go
+		Migrate()
 	},
 }
 
@@ -41,9 +45,14 @@ func _migrate(stateBytes *[]byte, version statePkg.SchemaVersion) ([]byte, error
 
 func Migrate() {
 	log.Printf("Migrating state file to new schema")
-	file, err := os.OpenFile(state.Filename, os.O_RDONLY|os.O_CREATE, statePkg.FileMode)
+	kubeClient := kubeclientfake.NewSimpleClientset()
+	clusterClient := clusterclientfake.NewSimpleClientset()
+	spClient := spclientfake.NewSimpleClientset()
+	state = statePkg.NewWithFile(stateFilename, kubeClient, clusterClient, spClient)
+
+	file, err := os.OpenFile(stateFilename, os.O_RDONLY|os.O_CREATE, statePkg.FileMode)
 	if err != nil {
-		log.Fatal("Unable to open %q: %v", state.Filename, err)
+		log.Fatalf("Unable to open %q: %v\n", state.Filename, err)
 	}
 
 	defer file.Close()
