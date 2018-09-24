@@ -1,10 +1,9 @@
 package cmd
 
 import (
-	"bytes"
-	"encoding/gob"
-	migrator "github.com/platform9/cctl/pkg/migrate"
+	"github.com/platform9/cctl/pkg/migrate"
 	statePkg "github.com/platform9/cctl/pkg/state"
+	"github.com/platform9/cctl/pkg/util/migrate"
 	"github.com/spf13/cobra"
 	"io/ioutil"
 	"log"
@@ -28,19 +27,8 @@ func init() {
 	rootCmd.AddCommand(migrateCmd)
 }
 
-func DecodeMigratedState(any []byte) statePkg.State {
-	buf := bytes.NewBuffer(any)
-	dec := gob.NewDecoder(buf)
-	var thisState statePkg.State
-	err := dec.Decode(&thisState)
-	if err != nil {
-		log.Fatal("decode:", err)
-	}
-	return thisState
-}
-
 func _migrate(stateBytes *[]byte) ([]byte, error) {
-	return migrator.MigrateV0toV1(stateBytes)
+	return migrate.MigrateV0toV1(stateBytes)
 }
 
 func Migrate() {
@@ -63,7 +51,7 @@ func Migrate() {
 		log.Fatal(err)
 	}
 
-	newState := DecodeMigratedState(migratedBytes)
+	newState := util.DecodeMigratedState(migratedBytes)
 	newState.KubeClient = state.KubeClient
 	newState.ClusterClient = state.ClusterClient
 	newState.SPClient = state.SPClient
