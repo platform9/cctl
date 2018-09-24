@@ -38,7 +38,7 @@ func MigrateV0toV1(stateBytes *[]byte) ([]byte, error) {
 	case 1:
 		return EncodeMigratedState(tempState), nil
 	default:
-		return EncodeMigratedState(tempState), fmt.Errorf("unable to migrate state file to schemaVersion 1: " +
+		return EncodeMigratedState(tempState), fmt.Errorf("unable to migrate state file to schemaVersion 1: "+
 			"schemaVersion is %v", tempState.SchemaVersion)
 	}
 	return EncodeMigratedState(tempState), nil

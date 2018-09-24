@@ -3,8 +3,8 @@ package util
 import (
 	"bytes"
 	"encoding/gob"
-	"log"
 	"github.com/platform9/cctl/pkg/state"
+	"log"
 )
 
 func DecodeMigratedState(any []byte) state.State {
