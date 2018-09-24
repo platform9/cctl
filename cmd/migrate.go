@@ -1,7 +1,8 @@
 package cmd
 
 import (
-	"github.com/ghodss/yaml"
+	"bytes"
+	"encoding/gob"
 	migrator "github.com/platform9/cctl/pkg/migrate"
 	statePkg "github.com/platform9/cctl/pkg/state"
 	"github.com/spf13/cobra"
@@ -23,6 +24,21 @@ func init() {
 	rootCmd.AddCommand(migrateCmd)
 }
 
+func DecodeMigratedState(any []byte) statePkg.State {
+	buf := bytes.NewBuffer(any)
+	dec := gob.NewDecoder(buf)
+	var thisState statePkg.State
+	err := dec.Decode(&thisState)
+	if err != nil {
+		log.Fatal("decode:", err)
+	}
+	return thisState
+}
+
+func _migrate(stateBytes *[]byte, version statePkg.SchemaVersion) ([]byte, error) {
+	return migrator.MigrateV0toV1(stateBytes, version)
+}
+
 func Migrate() {
 	log.Printf("Migrating state file to new schema")
 	file, err := os.OpenFile(state.Filename, os.O_RDONLY|os.O_CREATE, statePkg.FileMode)
@@ -33,19 +49,26 @@ func Migrate() {
 	defer file.Close()
 	stateBytes, err := ioutil.ReadAll(file)
 
-	migratedState, err := migrator.Migrate(&stateBytes, statePkg.Version)
+	migratedBytes, err := _migrate(&stateBytes, statePkg.Version)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	migratedBytes, err := migrator.ToBytes(migratedState)
+	newState := DecodeMigratedState(migratedBytes)
+	newState.KubeClient = state.KubeClient
+	newState.ClusterClient = state.ClusterClient
+	newState.SPClient = state.SPClient
+	newState.Filename = stateFilename
+
+	err = statePkg.CreateObjects(&newState)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Unable to sync API objects: %v", err)
 	}
-	yaml.Unmarshal(migratedBytes, state)
+
+	err = newState.PullFromAPIs()
 	if err != nil {
-		log.Fatal("Error unmarshalling migrated state file")
+		log.Fatalf("Unable to write to on-disk state: %v", err)
 	}
 	log.Printf("Finished migrating state file to new schema")
-	state.PullFromAPIs()
+
 }

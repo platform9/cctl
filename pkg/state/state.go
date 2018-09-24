@@ -93,12 +93,17 @@ func (s *State) write() error {
 	return nil
 }
 
-// PullFromAPIs reads objects in the state file and creates them using the APIs.
+// PushToAPIs reads objects in the state file and creates them using the APIs.
 // If the file does not exist, it will be created.
 func (s *State) PushToAPIs() error {
 	if err := s.read(); err != nil {
 		return err
 	}
+	err := CreateObjects(s)
+	return err
+}
+
+func CreateObjects(s *State) error {
 	for _, secret := range s.SecretList.Items {
 		if _, err := s.KubeClient.CoreV1().Secrets(secret.Namespace).Create(&secret); err != nil {
 			return err
