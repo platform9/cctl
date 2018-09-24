@@ -39,8 +39,8 @@ func DecodeMigratedState(any []byte) statePkg.State {
 	return thisState
 }
 
-func _migrate(stateBytes *[]byte, version statePkg.SchemaVersion) ([]byte, error) {
-	return migrator.MigrateV0toV1(stateBytes, version)
+func _migrate(stateBytes *[]byte) ([]byte, error) {
+	return migrator.MigrateV0toV1(stateBytes)
 }
 
 func Migrate() {
@@ -58,7 +58,7 @@ func Migrate() {
 	defer file.Close()
 	stateBytes, err := ioutil.ReadAll(file)
 
-	migratedBytes, err := _migrate(&stateBytes, statePkg.Version)
+	migratedBytes, err := _migrate(&stateBytes)
 	if err != nil {
 		log.Fatal(err)
 	}

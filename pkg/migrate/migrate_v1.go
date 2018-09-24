@@ -26,7 +26,7 @@ type StateV0toV1 struct {
 }
 
 // MigrateV0toV1 adds a schemaVersion field to the state file
-func MigrateV0toV1(stateBytes *[]byte, version state.SchemaVersion) ([]byte, error) {
+func MigrateV0toV1(stateBytes *[]byte) ([]byte, error) {
 	tempState := new(StateV0toV1)
 	if err := yaml.Unmarshal(*stateBytes, tempState); err != nil {
 		return []byte("What"), fmt.Errorf("unable to unmarshal state from YAML: %v", err)
