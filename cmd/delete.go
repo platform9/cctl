@@ -11,6 +11,9 @@ var deleteCmd = &cobra.Command{
 	Use:   "delete",
 	Short: "Used to delete resources",
 	Args:  cobra.MinimumNArgs(1),
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		InitState()
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("delete called")
 	},

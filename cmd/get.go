@@ -13,6 +13,9 @@ var getCmd = &cobra.Command{
 	Use:   "get",
 	Short: "Display one or more resources",
 	Args:  cobra.MinimumNArgs(1),
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		InitState()
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		log.Printf("Unknown resource %q. Use --help to print available options", args[0])
 	},

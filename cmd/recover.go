@@ -9,6 +9,9 @@ var recoverCmd = &cobra.Command{
 	Use:   "recover",
 	Short: "Used to recover the cluster",
 	Args:  cobra.MinimumNArgs(1),
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		InitState()
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 	},
 }

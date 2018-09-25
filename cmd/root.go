@@ -18,6 +18,9 @@ var state *cctlstate.State
 
 var rootCmd = &cobra.Command{
 	Use: "cctl",
+	PreRun: func(cmd *cobra.Command, args []string) {
+		InitState()
+	},
 	Long: `Platform9 tool for Kubernetes cluster management.
 This tool lets you create, scale, backup and restore
 your on-premise Kubernetes cluster.`,
@@ -31,11 +34,10 @@ func Execute() {
 }
 
 func init() {
-	cobra.OnInitialize(initState)
 	rootCmd.PersistentFlags().StringVar(&stateFilename, "state", "/etc/cctl-state.yaml", "state file")
 }
 
-func initState() {
+func InitState() {
 	kubeClient := kubeclientfake.NewSimpleClientset()
 	clusterClient := clusterclientfake.NewSimpleClientset()
 	spClient := spclientfake.NewSimpleClientset()
