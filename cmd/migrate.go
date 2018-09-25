@@ -3,7 +3,6 @@ package cmd
 import (
 	"github.com/platform9/cctl/pkg/migrate"
 	statePkg "github.com/platform9/cctl/pkg/state"
-	"github.com/platform9/cctl/pkg/util/migrate"
 	"github.com/spf13/cobra"
 	"io/ioutil"
 	"log"
@@ -14,7 +13,7 @@ import (
 	clusterclientfake "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/fake"
 )
 
-// upgradeCmd represents the upgrade command
+// migrateCmd represents the migrate command
 var migrateCmd = &cobra.Command{
 	Use:   "migrate",
 	Short: "Migrate state file to a newer schema",
@@ -25,10 +24,6 @@ var migrateCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(migrateCmd)
-}
-
-func _migrate(stateBytes *[]byte) ([]byte, error) {
-	return migrate.MigrateV0toV1(stateBytes)
 }
 
 func Migrate() {
@@ -46,12 +41,12 @@ func Migrate() {
 	defer file.Close()
 	stateBytes, err := ioutil.ReadAll(file)
 
-	migratedBytes, err := _migrate(&stateBytes)
+	migratedBytes, err := migrate.MigrateV0toV1(&stateBytes)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	newState := util.DecodeMigratedState(migratedBytes)
+	newState := migrate.DecodeMigratedState(migratedBytes)
 	newState.KubeClient = state.KubeClient
 	newState.ClusterClient = state.ClusterClient
 	newState.SPClient = state.SPClient

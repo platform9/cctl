@@ -99,8 +99,7 @@ func (s *State) PushToAPIs() error {
 	if err := s.read(); err != nil {
 		return err
 	}
-	err := CreateObjects(s)
-	return err
+	return CreateObjects(s)
 }
 
 func CreateObjects(s *State) error {
