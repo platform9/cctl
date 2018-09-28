@@ -51,8 +51,8 @@ type ClusterSpec struct {
 	// specified, the VIP is not created.
 	// +optional
 	VIPConfiguration *VIPConfiguration
-	// ClusterConfig is the set of configurable parameters for the cluster. If not provided
-	// If not provided default values for these parameters are chosen.
+	// ClusterConfig is the set of configurable parameters for the cluster.
+	// If not provided, the parameters are set to their default values.
 	ClusterConfig *ClusterConfig `json:"clusterConfig,omitempty"`
 }
 

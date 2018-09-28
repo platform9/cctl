@@ -2,22 +2,26 @@ package nodeadm
 
 import (
 	"fmt"
+	"strconv"
 
+	spconstants "github.com/platform9/ssh-provider/constants"
 	spv1 "github.com/platform9/ssh-provider/pkg/apis/sshprovider/v1alpha1"
 	"github.com/platform9/ssh-provider/pkg/controller"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
 type InitConfiguration struct {
-	MasterConfiguration KubeadmInitConfiguration `json:"masterConfiguration,omitempty"`
-	Networking          Networking               `json:"networking,omitempty"`
-	VIPConfiguration    VIPConfiguration         `json:"vipConfiguration,omitempty"`
-	ClusterConfig       spv1.ClusterConfig       `json:"clusterConfiguration,omitempty"`
+	MasterConfiguration KubeadmInitConfiguration   `json:"masterConfiguration,omitempty"`
+	Networking          Networking                 `json:"networking,omitempty"`
+	VIPConfiguration    VIPConfiguration           `json:"vipConfiguration,omitempty"`
+	Kubelet             *spv1.KubeletConfiguration `json:"kubelet,omitempty"`
+	NetworkBackend      map[string]string          `json:"networkBackend,omitempty"`
+	KeepAlived          map[string]string          `json:"keepAlived,omitempty"`
 }
 
 type JoinConfiguration struct {
-	Networking    Networking         `json:"networking,omitempty"`
-	ClusterConfig spv1.ClusterConfig `json:"clusterConfiguration,omitempty"`
+	Networking Networking                 `json:"networking,omitempty"`
+	Kubelet    *spv1.KubeletConfiguration `json:"kubelet,omitempty"`
 }
 
 type VIPConfiguration struct {
@@ -41,11 +45,17 @@ type Networking struct {
 	DNSDomain string `json:"dnsDomain,omitempty"`
 }
 type KubeadmInitConfiguration struct {
-	API               API        `json:"api,omitempty"`
-	APIServerCertSANs []string   `json:"apiServerCertSANs,omitempty"`
-	Etcd              Etcd       `json:"etcd,omitempty"`
-	KubernetesVersion string     `json:"kubernetesVersion,omitempty"`
-	Networking        Networking `json:"networking,omitempty"`
+	API                        API                         `json:"api,omitempty"`
+	APIServerCertSANs          []string                    `json:"apiServerCertSANs,omitempty"`
+	Etcd                       Etcd                        `json:"etcd,omitempty"`
+	KubernetesVersion          string                      `json:"kubernetesVersion,omitempty"`
+	Networking                 Networking                  `json:"networking,omitempty"`
+	KubeletConfiguration       spv1.KubeletConfiguration   `json:"kubeletConfiguration,omitempty"`
+	KubeProxy                  spv1.KubeProxyConfiguration `json:"kubeProxy,omitempty"`
+	APIServerExtraArgs         map[string]string           `json:"apiServerExtraArgs,omitempty"`
+	ControllerManagerExtraArgs map[string]string           `json:"controllerManagerExtraArgs,omitempty"`
+	SchedulerExtraArgs         map[string]string           `json:"schedulerExtraArgs,omitempty"`
+	PrivilegedPods             bool                        `json:"privilegedPods,omitempty"`
 }
 
 type API struct {
@@ -80,9 +90,7 @@ func InitConfigurationForMachine(cluster clusterv1.Cluster, machine clusterv1.Ma
 	cfg.MasterConfiguration.Etcd.CertFile = "/etc/etcd/pki/apiserver-etcd-client.crt"
 	cfg.MasterConfiguration.Etcd.KeyFile = "/etc/etcd/pki/apiserver-etcd-client.key"
 	if cpc.ClusterConfig != nil {
-		cfg.ClusterConfig = *cpc.ClusterConfig
-	} else {
-		cfg.ClusterConfig = spv1.ClusterConfig{}
+		setInitConfigFromClusterConfig(cfg, cpc.ClusterConfig)
 	}
 	// Networking
 	switch len(cluster.Spec.ClusterNetwork.Pods.CIDRBlocks) {
@@ -113,6 +121,58 @@ func InitConfigurationForMachine(cluster clusterv1.Cluster, machine clusterv1.Ma
 	return cfg, nil
 }
 
+// SetKubeAPIServerConfig sets configuration for API Server.
+// Depending on the parameter name this function sets
+// the MasterConfiguration fields or APIServerExtraArgs
+func setKubeAPIServerConfig(cfg *InitConfiguration, clusterConfig *spv1.ClusterConfig) error {
+	if clusterConfig.KubeAPIServer != nil {
+		// Set fields for API server manually as there is no upstream type yet.
+		// BindPort
+		bindPortStr, ok := clusterConfig.KubeAPIServer[spconstants.KubeAPIServerSecurePortKey]
+		if ok {
+			bindPort, err := strconv.ParseInt(bindPortStr, 10, 32)
+			if err != nil {
+				return fmt.Errorf("unable to parse port value: %s", bindPortStr)
+			}
+			cfg.MasterConfiguration.API.BindPort = int32(bindPort)
+			// delete as it should not be considered as an extra arg
+			delete(clusterConfig.KubeAPIServer, spconstants.KubeAPIServerSecurePortKey)
+		}
+		// PrivilegedPods
+		allowPrivilegedStr, ok := clusterConfig.KubeAPIServer[spconstants.KubeAPIServerAllowPrivilegedKey]
+		if ok {
+			allowPrivileged, err := strconv.ParseBool(allowPrivilegedStr)
+			if err != nil {
+				return fmt.Errorf("unable to parse allow privileged field value: %s", bindPortStr)
+			}
+			cfg.MasterConfiguration.PrivilegedPods = allowPrivileged
+			// delete as it should not be considered as an extra arg
+			delete(clusterConfig.KubeAPIServer, spconstants.KubeAPIServerAllowPrivilegedKey)
+		}
+		cfg.MasterConfiguration.APIServerExtraArgs = clusterConfig.KubeAPIServer
+	}
+	return nil
+}
+
+func setInitConfigFromClusterConfig(cfg *InitConfiguration, clusterConfig *spv1.ClusterConfig) error {
+	if err := setKubeAPIServerConfig(cfg, clusterConfig); err != nil {
+		return fmt.Errorf("unable to set configurable parameters for api-server: %v", err)
+	}
+	cfg.MasterConfiguration.ControllerManagerExtraArgs = clusterConfig.KubeControllerManager
+	if clusterConfig.KubeProxy != nil {
+		cfg.MasterConfiguration.KubeProxy = *clusterConfig.KubeProxy
+	}
+	cfg.MasterConfiguration.SchedulerExtraArgs = clusterConfig.KubeScheduler
+	cfg.Kubelet = clusterConfig.Kubelet
+	cfg.NetworkBackend = clusterConfig.NetworkBackend
+	cfg.KeepAlived = clusterConfig.KeepAlived
+	return nil
+}
+
+func setJoinConfigFromClusterConfig(cfg *JoinConfiguration, clusterConfig *spv1.ClusterConfig) {
+	cfg.Kubelet = clusterConfig.Kubelet
+}
+
 func JoinConfigurationForMachine(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (*JoinConfiguration, error) {
 	cfg := &JoinConfiguration{}
 
@@ -140,9 +200,7 @@ func JoinConfigurationForMachine(cluster *clusterv1.Cluster, machine *clusterv1.
 	}
 	cfg.Networking.DNSDomain = cluster.Spec.ClusterNetwork.ServiceDomain
 	if cpc.ClusterConfig != nil {
-		cfg.ClusterConfig = *cpc.ClusterConfig
-	} else {
-		cfg.ClusterConfig = spv1.ClusterConfig{}
+		setJoinConfigFromClusterConfig(cfg, cpc.ClusterConfig)
 	}
 	return cfg, nil
 }
