@@ -608,22 +608,14 @@ var clusterCmdUpgrade = &cobra.Command{
 		if err != nil {
 			log.Fatalf("unable to get cluster spec %s: %v", common.DefaultClusterName, err)
 		}
-		// if cluster-config is provided during upgrade
-		clusterConfigFile := cmd.Flag("cluster-config").Value.String()
-		if len(clusterConfigFile) != 0 {
-			var err error
-			clusterSpec.ClusterConfig, err = parseClusterConfigFromFile(clusterConfigFile)
-			if err != nil {
-				log.Fatalf("Unable to parse cluster config %v", err)
-			}
-		}
-		// if there is still no clusterconfig
 		if clusterSpec.ClusterConfig == nil {
 			clusterSpec.ClusterConfig = &spv1.ClusterConfig{}
 			setClusterConfigDefaults(clusterSpec.ClusterConfig)
 		}
-		_, err = state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).Update(cluster)
-		if err != nil {
+		if err := sputil.PutClusterSpec(*clusterSpec, cluster); err != nil {
+			log.Fatalf("Unable to update cluster spec %s: %v", common.DefaultClusterName, err)
+		}
+		if _, err = state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).Update(cluster); err != nil {
 			log.Fatalf("unable to update cluster spec %s: %v", common.DefaultClusterName, err)
 		}
 		machines, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).List(metav1.ListOptions{})
@@ -671,6 +663,6 @@ func init() {
 
 	getCmd.AddCommand(clusterCmdGet)
 	upgradeCmd.AddCommand(clusterCmdUpgrade)
-	upgradeCmd.Flags().String("cluster-config", "", "Location of file containing configurable parameters for the cluster")
+	clusterCmdUpgrade.Flags().String("cluster-config", "", "Location of file containing configurable parameters for the cluster")
 
 }
