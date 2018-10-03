@@ -608,17 +608,18 @@ var clusterCmdUpgrade = &cobra.Command{
 		if err != nil {
 			log.Fatalf("unable to get cluster spec %s: %v", common.DefaultClusterName, err)
 		}
-		// if there is no clusterconfig
+		// if cluster-config is provided during upgrade
+		clusterConfigFile := cmd.Flag("cluster-config").Value.String()
+		if len(clusterConfigFile) != 0 {
+			var err error
+			clusterSpec.ClusterConfig, err = parseClusterConfigFromFile(clusterConfigFile)
+			if err != nil {
+				log.Fatalf("Unable to parse cluster config %v", err)
+			}
+		}
+		// if there is still no clusterconfig
 		if clusterSpec.ClusterConfig == nil {
 			clusterSpec.ClusterConfig = &spv1.ClusterConfig{}
-			clusterConfigFile := cmd.Flag("cluster-config").Value.String()
-			if len(clusterConfigFile) != 0 {
-				var err error
-				clusterSpec.ClusterConfig, err = parseClusterConfigFromFile(clusterConfigFile)
-				if err != nil {
-					log.Fatalf("Unable to parse cluster config %v", err)
-				}
-			}
 			setClusterConfigDefaults(clusterSpec.ClusterConfig)
 		}
 		_, err = state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).Update(cluster)
