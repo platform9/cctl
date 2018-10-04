@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	cctlstate "github.com/platform9/cctl/pkg/state"
+	cctlstate "github.com/platform9/cctl/pkg/state/v1"
 
 	spclientfake "github.com/platform9/ssh-provider/pkg/client/clientset_generated/clientset/fake"
 	"github.com/spf13/cobra"
@@ -41,7 +41,7 @@ func InitState() {
 	kubeClient := kubeclientfake.NewSimpleClientset()
 	clusterClient := clusterclientfake.NewSimpleClientset()
 	spClient := spclientfake.NewSimpleClientset()
-	state = cctlstate.NewWithFile(stateFilename, kubeClient, clusterClient, spClient)
+	state = cctlstate.NewFromFile(stateFilename, kubeClient, clusterClient, spClient)
 
 	if err := state.PushToAPIs(); err != nil {
 		log.Fatalf("Unable to sync on-disk state: %v", err)
