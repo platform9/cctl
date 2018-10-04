@@ -50,6 +50,11 @@ ensure: $(DEP_BIN)
 $(BIN):
 	go build -o $(BIN) -ldflags "$(LDFLAGS)"
 
+unit-test:
+	pushd pkg/migrate && \
+	go test -v && \
+	popd
+
 format:
 	gofmt -w -s *.go
 	gofmt -w -s */*.go
