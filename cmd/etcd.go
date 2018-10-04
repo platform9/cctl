@@ -167,7 +167,7 @@ func recoverEtcd(localPath, remotePath string, etcdCASecret *corev1.Secret, clus
 	for _, mwc := range mastersWithClient {
 		log.Printf("[recover etcd] Removing kube-apiserver container on master %q to trigger immediate restart", mwc.Machine.Name)
 		if err := removeKubeAPIServerContainer(mwc.Client); err != nil {
-			fmt.Errorf("unable to remove kube-apiserver container on master %q: %v", mwc.Machine.Name, err)
+			return fmt.Errorf("unable to remove kube-apiserver container on master %q: %v", mwc.Machine.Name, err)
 		}
 	}
 
