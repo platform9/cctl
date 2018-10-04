@@ -1,10 +1,11 @@
 package migrate
 
 import (
-	"github.com/ghodss/yaml"
 	"log"
 	"strings"
 	"testing"
+
+	"github.com/ghodss/yaml"
 )
 
 func marshal(s StateV0toV1) []byte {
