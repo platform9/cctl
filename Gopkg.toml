@@ -42,7 +42,7 @@
 
 [[constraint]]
   name = "github.com/platform9/ssh-provider"
-  branch = "private/configurable-parameters"
+  branch = "master"
 
 [[constraint]]
   branch = "master"
