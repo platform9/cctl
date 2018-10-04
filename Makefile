@@ -20,7 +20,7 @@ REPO := cctl
 PACKAGE_GOPATH := /go/src/github.com/platform9/$(REPO)
 DEP_TEST=$(shell which dep)
 LDFLAGS := $(shell source ./version.sh ; KUBE_ROOT=. ; KUBE_GIT_VERSION=${VERSION_OVERRIDE} ; kube::version::ldflags)
-GIT_STORAGE_MOUNT := $(shell source ./git_utils.sh; container_git_storage_mount) 
+GIT_STORAGE_MOUNT := $(shell source ./git_utils.sh; container_git_storage_mount)
 
 ifeq ($(DEP_TEST),)
 	DEP_BIN := $(CWD)/bin/dep
@@ -28,7 +28,7 @@ else
 	DEP_BIN := $(DEP_TEST)
 endif
 
-.PHONY: clean clean-all container-build default ensure format
+.PHONY: clean clean-all container-build default ensure format test
 
 default: $(BIN)
 
@@ -47,7 +47,7 @@ ensure: $(DEP_BIN)
 	echo $(DEP_BIN)
 	$(DEP_BIN) ensure -v
 
-$(BIN):
+$(BIN): test
 	go build -o $(BIN) -ldflags "$(LDFLAGS)"
 
 format:
@@ -59,3 +59,6 @@ clean-all: clean
 
 clean:
 	rm -rf $(BIN)
+
+test:
+	go test -v ./...
