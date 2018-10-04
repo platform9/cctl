@@ -52,13 +52,6 @@ func (in *ClusterConfig) DeepCopyInto(out *ClusterConfig) {
 			(*out)[key] = val
 		}
 	}
-	if in.KubeDNS != nil {
-		in, out := &in.KubeDNS, &out.KubeDNS
-		*out = make(map[string]string, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val
-		}
-	}
 	if in.KubeControllerManager != nil {
 		in, out := &in.KubeControllerManager, &out.KubeControllerManager
 		*out = make(map[string]string, len(*in))

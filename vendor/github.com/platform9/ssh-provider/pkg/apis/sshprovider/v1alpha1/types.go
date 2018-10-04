@@ -77,7 +77,6 @@ type ClusterConfig struct {
 	// generic map[string]string types would eventually be replaced by
 	// corresponding structured types as they become available upstream
 	KubeAPIServer         map[string]string       `json:"kubeAPIServer,omitempty"`
-	KubeDNS               map[string]string       `json:"kubeDNS,omitempty"`
 	KubeControllerManager map[string]string       `json:"kubeControllerManager,omitempty"`
 	KubeScheduler         map[string]string       `json:"kubeScheduler,omitempty"`
 	KubeProxy             *KubeProxyConfiguration `json:"kubeProxy,omitempty"`

@@ -60,7 +60,6 @@ type ClusterConfig struct {
 	// generic map[string]string types would eventually be replaced by
 	// corresponding structured types as they become available upstream
 	KubeAPIServer         map[string]string
-	KubeDNS               map[string]string
 	KubeControllerManager map[string]string
 	KubeScheduler         map[string]string
 	KubeProxy             *KubeProxyConfiguration

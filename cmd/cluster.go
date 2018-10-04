@@ -663,6 +663,4 @@ func init() {
 
 	getCmd.AddCommand(clusterCmdGet)
 	upgradeCmd.AddCommand(clusterCmdUpgrade)
-	clusterCmdUpgrade.Flags().String("cluster-config", "", "Location of file containing configurable parameters for the cluster")
-
 }

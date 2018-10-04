@@ -123,7 +123,6 @@ func Convert_sshprovider_ClientConnectionConfiguration_To_v1alpha1_ClientConnect
 
 func autoConvert_v1alpha1_ClusterConfig_To_sshprovider_ClusterConfig(in *ClusterConfig, out *sshprovider.ClusterConfig, s conversion.Scope) error {
 	out.KubeAPIServer = *(*map[string]string)(unsafe.Pointer(&in.KubeAPIServer))
-	out.KubeDNS = *(*map[string]string)(unsafe.Pointer(&in.KubeDNS))
 	out.KubeControllerManager = *(*map[string]string)(unsafe.Pointer(&in.KubeControllerManager))
 	out.KubeScheduler = *(*map[string]string)(unsafe.Pointer(&in.KubeScheduler))
 	out.KubeProxy = (*sshprovider.KubeProxyConfiguration)(unsafe.Pointer(in.KubeProxy))
@@ -140,7 +139,6 @@ func Convert_v1alpha1_ClusterConfig_To_sshprovider_ClusterConfig(in *ClusterConf
 
 func autoConvert_sshprovider_ClusterConfig_To_v1alpha1_ClusterConfig(in *sshprovider.ClusterConfig, out *ClusterConfig, s conversion.Scope) error {
 	out.KubeAPIServer = *(*map[string]string)(unsafe.Pointer(&in.KubeAPIServer))
-	out.KubeDNS = *(*map[string]string)(unsafe.Pointer(&in.KubeDNS))
 	out.KubeControllerManager = *(*map[string]string)(unsafe.Pointer(&in.KubeControllerManager))
 	out.KubeScheduler = *(*map[string]string)(unsafe.Pointer(&in.KubeScheduler))
 	out.KubeProxy = (*KubeProxyConfiguration)(unsafe.Pointer(in.KubeProxy))
