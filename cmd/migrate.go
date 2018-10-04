@@ -41,7 +41,7 @@ func Migrate() {
 	defer file.Close()
 	stateBytes, err := ioutil.ReadAll(file)
 
-	migratedBytes, err := migrate.MigrateV0toV1(&stateBytes)
+	migratedBytes, err := migrate.MigrateV0toV1(stateBytes)
 	if err != nil {
 		log.Fatal(err)
 	}

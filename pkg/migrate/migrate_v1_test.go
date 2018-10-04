@@ -2,7 +2,6 @@ package migrate
 
 import (
 	"github.com/ghodss/yaml"
-	"github.com/platform9/cctl/pkg/util/migrate"
 	"log"
 	"strings"
 	"testing"
@@ -17,7 +16,7 @@ func marshal(s StateV0toV1) []byte {
 }
 
 func decode(b []byte) {
-	newState := util.DecodeMigratedState(b)
+	newState := DecodeMigratedState(b)
 	if newState.SchemaVersion != 1 {
 		log.Fatal("Migration failed.")
 	}
@@ -37,7 +36,7 @@ func testSchemaVersionUpdate(t *testing.T) {
 		}
 		stateBytes := marshal(testYaml)
 
-		migratedBytes, err := MigrateV0toV1(&stateBytes)
+		migratedBytes, err := MigrateV0toV1(stateBytes)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -53,7 +52,7 @@ func testHigherSchemaVersion(t *testing.T) {
 		}
 		stateBytes := marshal(testYaml)
 
-		_, err := MigrateV0toV1(&stateBytes)
+		_, err := MigrateV0toV1(stateBytes)
 		if err != nil {
 			if !strings.Contains(err.Error(), "unable to migrate state file to schemaVersion 1: schemaVersion is 5") {
 				log.Fatal("Migration failed")
@@ -69,7 +68,7 @@ func testSameSchemaVersion(t *testing.T) {
 		}
 		stateBytes := marshal(testYaml)
 
-		migratedBytes, err := MigrateV0toV1(&stateBytes)
+		migratedBytes, err := MigrateV0toV1(stateBytes)
 		if err != nil {
 			log.Fatal(err)
 		}

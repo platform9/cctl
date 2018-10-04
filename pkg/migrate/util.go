@@ -14,7 +14,6 @@ func EncodeMigratedState(any interface{}) []byte {
 	return buf
 }
 
-
 func DecodeMigratedState(any []byte) state.State {
 	var thisState state.State
 	err := yaml.Unmarshal(any, &thisState)
