@@ -21,6 +21,7 @@ import (
 	"github.com/platform9/cctl/pkg/util/clusterapi"
 	"github.com/platform9/cctl/semverutil"
 
+	spconstants "github.com/platform9/ssh-provider/constants"
 	spv1 "github.com/platform9/ssh-provider/pkg/apis/sshprovider/v1alpha1"
 	sputil "github.com/platform9/ssh-provider/pkg/controller"
 	"github.com/spf13/cobra"
@@ -63,15 +64,25 @@ var clusterCmdCreate = &cobra.Command{
 		if (len(frontProxyCAKeyFile) == 0) != (len(frontProxyCAKeyFile) == 0) {
 			log.Fatalf("Must specify both --front-proxy-ca-cert and --front-proxy-ca-key")
 		}
-
+		clusterConfig := &spv1.ClusterConfig{}
+		clusterConfigFile := cmd.Flag("cluster-config").Value.String()
+		if len(clusterConfigFile) != 0 {
+			clusterConfig, err = parseClusterConfigFromFile(clusterConfigFile)
+			if err != nil {
+				log.Fatalf("Unable to parse cluster config %v", err)
+			}
+		}
+		setClusterConfigDefaults(clusterConfig)
 		newAPIServerCASecret := createCASecret(common.DefaultAPIServerCASecretName, apiServerCACertFile, apiServerCAKeyFile)
 		newEtcdCASecret := createCASecret(common.DefaultEtcdCASecretName, etcdCACertFile, etcdCAKeyFile)
 		newFrontProxyCASecret := createCASecret(common.DefaultFrontProxyCASecretName, frontProxyCACertFile, frontProxyCAKeyFile)
 
 		newServiceAccountKeySecret := createServiceAccountKeySecret(saPrivateKeyFile, saPublicKeyFile)
 		newBootstrapTokenSecret := createBootstrapTokenSecret(common.DefaultBootstrapTokenSecretName)
-		newCluster := createCluster(common.DefaultClusterName, podsCIDR, servicesCIDR, vip, routerID)
-
+		newCluster, err := createCluster(common.DefaultClusterName, podsCIDR, servicesCIDR, vip, routerID, clusterConfig)
+		if err != nil {
+			log.Fatalf("Unable to create cluster: %v", err)
+		}
 		if _, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Create(newAPIServerCASecret); err != nil {
 			log.Fatalf("Unable to create API server CA secret: %v", err)
 		}
@@ -90,16 +101,84 @@ var clusterCmdCreate = &cobra.Command{
 		if _, err := state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).Create(newCluster); err != nil {
 			log.Fatalf("Unable to create cluster %q: %v", common.DefaultClusterName, err)
 		}
-
 		if err := state.PullFromAPIs(); err != nil {
 			log.Fatalf("Unable to sync on-disk state: %v", err)
 		}
-
 		log.Println("Cluster created successfully.")
 	},
 }
 
-func createCluster(clusterName, podsCIDR, servicesCIDR, vip string, routerID int) *clusterv1.Cluster {
+func setClusterConfigDefaults(clusterConfig *spv1.ClusterConfig) {
+	setKubeAPIServerDefaults(clusterConfig)
+	setKubeControllerMgrDefaults(clusterConfig)
+	setKubeletConfigDefaults(clusterConfig)
+}
+
+func setKubeAPIServerDefaults(clusterConfig *spv1.ClusterConfig) {
+	if clusterConfig.KubeAPIServer == nil {
+		clusterConfig.KubeAPIServer = make(map[string]string)
+	}
+	// PrivilegedPods
+	if _, ok := clusterConfig.KubeAPIServer[spconstants.KubeAPIServerAllowPrivilegedKey]; !ok {
+		clusterConfig.KubeAPIServer[spconstants.KubeAPIServerAllowPrivilegedKey] = common.KubeAPIServerAllowPrivileged
+	}
+	// ServiceNodePortRange
+	if _, ok := clusterConfig.KubeAPIServer[spconstants.KubeAPIServerServiceNodePortRangeKey]; !ok {
+		clusterConfig.KubeAPIServer[spconstants.KubeAPIServerServiceNodePortRangeKey] = common.KubeAPIServerServiceNodePortRange
+	}
+}
+
+func setKubeControllerMgrDefaults(clusterConfig *spv1.ClusterConfig) {
+	if clusterConfig.KubeControllerManager == nil {
+		clusterConfig.KubeControllerManager = make(map[string]string)
+	}
+	if _, ok := clusterConfig.KubeControllerManager[spconstants.KubeControllerMgrPodEvictionTimeoutKey]; !ok {
+		clusterConfig.KubeControllerManager[spconstants.KubeControllerMgrPodEvictionTimeoutKey] = common.KubeControllerMgrPodEvictionTimeout
+	}
+}
+
+func setKubeletConfigDefaults(clusterConfig *spv1.ClusterConfig) {
+	if clusterConfig.Kubelet == nil {
+		clusterConfig.Kubelet = &spv1.KubeletConfiguration{}
+	}
+	if clusterConfig.Kubelet.KubeAPIQPS == nil {
+		clusterConfig.Kubelet.KubeAPIQPS = &common.KubeletKubeAPIQPS
+	}
+	if clusterConfig.Kubelet.KubeAPIBurst == 0 {
+		clusterConfig.Kubelet.KubeAPIBurst = common.KubeletKubeAPIBurst
+	}
+	if clusterConfig.Kubelet.MaxPods == 0 {
+		clusterConfig.Kubelet.MaxPods = common.KubeletMaxPods
+	}
+	if clusterConfig.Kubelet.FailSwapOn == nil {
+		clusterConfig.Kubelet.FailSwapOn = &common.KubeletFailSwapOn
+	}
+}
+
+func parseClusterConfigFromFile(file string) (*spv1.ClusterConfig, error) {
+	data, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read cluster config file %s", file)
+	}
+	clusterConfig := spv1.ClusterConfig{}
+	if err = yaml.Unmarshal(data, &clusterConfig); err != nil {
+		return nil, fmt.Errorf("unable to decode cluster config: %v", err)
+	}
+	return &clusterConfig, nil
+}
+
+func createCluster(clusterName, podsCIDR, servicesCIDR, vip string, routerID int, clusterConfig *spv1.ClusterConfig) (*clusterv1.Cluster, error) {
+	apiServerPortStr, ok := clusterConfig.KubeAPIServer[spconstants.KubeAPIServerSecurePortKey]
+	var apiServerPort int64
+	if !ok {
+		apiServerPort = common.DefaultAPIServerPort
+	} else {
+		var err error
+		apiServerPort, err = strconv.ParseInt(apiServerPortStr, 10, 32)
+		if err != nil {
+			return nil, err
+		}
+	}
 	newCluster := clusterv1.Cluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Cluster",
@@ -129,7 +208,7 @@ func createCluster(clusterName, podsCIDR, servicesCIDR, vip string, routerID int
 			APIEndpoints: []clusterv1.APIEndpoint{
 				{
 					Host: vip,
-					Port: common.DefaultApiserverPort,
+					Port: int(apiServerPort),
 				},
 			},
 		},
@@ -159,6 +238,7 @@ func createCluster(clusterName, podsCIDR, servicesCIDR, vip string, routerID int
 			IP:       vip,
 			RouterID: routerID,
 		},
+		ClusterConfig: clusterConfig,
 	}
 
 	spClusterStatus := spv1.ClusterStatus{
@@ -172,7 +252,7 @@ func createCluster(clusterName, podsCIDR, servicesCIDR, vip string, routerID int
 	sputil.PutClusterSpec(spClusterSpec, &newCluster)
 	sputil.PutClusterStatus(spClusterStatus, &newCluster)
 
-	return &newCluster
+	return &newCluster, nil
 }
 
 func createServiceAccountKeySecret(saPrivateKeyFile, saPublicKeyFile string) *corev1.Secret {
@@ -519,6 +599,25 @@ var clusterCmdUpgrade = &cobra.Command{
 		}
 		log.Print("[pre-flight] Preflight check passed")
 		log.Print("Starting cluster upgrade")
+
+		cluster, err := state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).Get(common.DefaultClusterName, metav1.GetOptions{})
+		if err != nil {
+			log.Fatalf("unable to get cluster %s: %v", common.DefaultClusterName, err)
+		}
+		clusterSpec, err := sputil.GetClusterSpec(*cluster)
+		if err != nil {
+			log.Fatalf("unable to get cluster spec %s: %v", common.DefaultClusterName, err)
+		}
+		if clusterSpec.ClusterConfig == nil {
+			clusterSpec.ClusterConfig = &spv1.ClusterConfig{}
+			setClusterConfigDefaults(clusterSpec.ClusterConfig)
+		}
+		if err := sputil.PutClusterSpec(*clusterSpec, cluster); err != nil {
+			log.Fatalf("Unable to update cluster spec %s: %v", common.DefaultClusterName, err)
+		}
+		if _, err = state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).Update(cluster); err != nil {
+			log.Fatalf("unable to update cluster spec %s: %v", common.DefaultClusterName, err)
+		}
 		machines, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).List(metav1.ListOptions{})
 		if err != nil {
 			log.Fatalf("unable to get list of machines in the cluster")
@@ -532,6 +631,9 @@ var clusterCmdUpgrade = &cobra.Command{
 		log.Printf("Upgrading cluster nodes")
 		if err = upgradeMachines(nodes); err != nil {
 			log.Fatalf("Cluster upgrade failed with error: %v", err)
+		}
+		if err := state.PullFromAPIs(); err != nil {
+			log.Fatalf("Unable to sync on-disk state: %v", err)
 		}
 		log.Printf("Cluster upgraded successfully")
 	},
@@ -551,6 +653,7 @@ func init() {
 	clusterCmdCreate.Flags().String("front-proxy-ca-key", "", "The front proxy CA certificate key.")
 	clusterCmdCreate.Flags().String("saPrivateKey", "", "Location of file containing private key used for signing service account tokens")
 	clusterCmdCreate.Flags().String("saPublicKey", "", "Location of file containing public key used for signing service account tokens")
+	clusterCmdCreate.Flags().String("cluster-config", "", "Location of file containing configurable parameters for the cluster")
 	clusterCmdCreate.MarkFlagRequired("vip")
 	clusterCmdCreate.MarkFlagRequired("routerID")
 	//clusterCmdCreate.Flags().String("version", "1.10.2", "Kubernetes version")
