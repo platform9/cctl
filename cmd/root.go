@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	cctlstate "github.com/platform9/cctl/pkg/state"
+	cctlstate "github.com/platform9/cctl/pkg/state/v2"
 
 	spclientfake "github.com/platform9/ssh-provider/pkg/client/clientset_generated/clientset/fake"
 	"github.com/spf13/cobra"
