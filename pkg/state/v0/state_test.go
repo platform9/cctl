@@ -1,4 +1,4 @@
-package state_test
+package v0_test
 
 import (
 	"testing"
@@ -11,7 +11,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	clusterclientfake "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/fake"
 
-	"github.com/platform9/cctl/pkg/state"
+	state "github.com/platform9/cctl/pkg/state/v0"
 )
 
 const (
@@ -24,7 +24,7 @@ func TestPullFromAPIs(t *testing.T) {
 	clusterClient := clusterclientfake.NewSimpleClientset()
 	spClient := spclientfake.NewSimpleClientset()
 
-	s := state.NewFromFile(testFilename, kubeClient, clusterClient, spClient)
+	s := state.NewWithFile(testFilename, kubeClient, clusterClient, spClient)
 
 	cluster := clusterv1.Cluster{
 		TypeMeta: metav1.TypeMeta{
