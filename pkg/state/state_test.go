@@ -24,7 +24,7 @@ func TestPullFromAPIs(t *testing.T) {
 	clusterClient := clusterclientfake.NewSimpleClientset()
 	spClient := spclientfake.NewSimpleClientset()
 
-	s := state.NewFromFile(testFilename, kubeClient, clusterClient, spClient)
+	s := state.NewWithFile(testFilename, kubeClient, clusterClient, spClient)
 
 	cluster := clusterv1.Cluster{
 		TypeMeta: metav1.TypeMeta{
