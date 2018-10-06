@@ -6,6 +6,7 @@ const (
 	DefaultAPIServerPort                = 6443
 	DrainTimeout                        = 5 * time.Minute
 	DrainGracePeriodSeconds             = -1
+	DrainDeleteLocalData                = false
 	MasterRole                          = "master"
 	NodeRole                            = "node"
 	DefaultSSHPort                      = 22
