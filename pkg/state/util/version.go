@@ -9,10 +9,12 @@ import (
 	"github.com/ghodss/yaml"
 )
 
+// fakeState is a subset of the state schema used to parse the schema version
 type fakeState struct {
 	SchemaVersion int `json:"schemaVersion"`
 }
 
+// VersionFromFile returns the state version of the file
 func VersionFromFile(filename string) (int, error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -22,6 +24,7 @@ func VersionFromFile(filename string) (int, error) {
 	return Version(file)
 }
 
+// Version returns the state version
 func Version(r io.Reader) (int, error) {
 	stateBytes, err := ioutil.ReadAll(r)
 	if err != nil {
