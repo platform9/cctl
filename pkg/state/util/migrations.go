@@ -13,6 +13,7 @@ import (
 	"github.com/platform9/cctl/pkg/state/v2"
 )
 
+// StateV1FromStateV0 migrates state from V0 to V1
 func StateV1FromStateV0(stateV0 *v0.State) *v1.State {
 	stateV1 := v1.State{
 		SchemaVersion: v1.Version,
@@ -24,6 +25,8 @@ func StateV1FromStateV0(stateV0 *v0.State) *v1.State {
 	return &stateV1
 }
 
+// ClusterConfigForV0AndV1Cluster returns a ClusterConfig with values that match
+// the configuration hard-coded for clusters created with V0 and V1 state
 func ClusterConfigForV0AndV1Cluster() *spv1.ClusterConfig {
 	failSwapOn := false
 	kubeAPIQPS := int32(20)
@@ -46,6 +49,7 @@ func ClusterConfigForV0AndV1Cluster() *spv1.ClusterConfig {
 	return &cc
 }
 
+// StateV2FromStateV1 migrates state from V1 to V2
 func StateV2FromStateV1(stateV1 *v1.State) *v2.State {
 	stateV2 := v2.State{
 		SchemaVersion: v2.Version,
