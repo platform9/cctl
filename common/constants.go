@@ -7,6 +7,7 @@ const (
 	DrainTimeout                        = 5 * time.Minute
 	DrainGracePeriodSeconds             = -1
 	DrainDeleteLocalData                = false
+	DrainForce                          = false
 	MasterRole                          = "master"
 	NodeRole                            = "node"
 	DefaultSSHPort                      = 22

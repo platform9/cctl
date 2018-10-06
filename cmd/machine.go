@@ -38,6 +38,7 @@ var (
 	drainTimeout            time.Duration
 	drainGracePeriodSeconds int
 	drainDeleteLocalData    bool
+	drainForce              bool
 )
 
 func updateBootstrapToken(masterMachine *clusterv1.Machine, masterProvisionedMachine *spv1.ProvisionedMachine) error {
@@ -859,9 +860,7 @@ func drainNode(nodeName string, machineClient sshmachine.Client) error {
 	// Use --ignore-daemonsets because any DaemonSet-managed Pods will
 	// prevent the drain otherwise, and because all Nodes have DaemonSet
 	// Pods (kube-proxy, overlay network).
-	// Do NOT use --force. Unmanaged pods must be removed by the user, since
-	// they won't be rescheduled to another node.
-	cmd := fmt.Sprintf("%s --kubeconfig=%s drain %s --timeout=%v --grace-period=%v --delete-local-data=%v --ignore-daemonsets", common.KubectlFile, common.AdminKubeconfig, nodeName, drainTimeout, drainGracePeriodSeconds, drainDeleteLocalData)
+	cmd := fmt.Sprintf("%s --kubeconfig=%s drain %s --timeout=%v --grace-period=%v --delete-local-data=%v --force=%v --ignore-daemonsets", common.KubectlFile, common.AdminKubeconfig, nodeName, drainTimeout, drainGracePeriodSeconds, drainDeleteLocalData, drainForce)
 	stdOut, stdErr, err := machineClient.RunCommand(cmd)
 	if err != nil {
 		return fmt.Errorf("error running %q: %v (%s) (%s)", cmd, err, string(stdOut), string(stdErr))
@@ -921,6 +920,7 @@ func init() {
 	machineCmdDelete.Flags().DurationVar(&drainTimeout, "drain-timeout", common.DrainTimeout, "The length of time to wait before giving up, zero means infinite")
 	machineCmdDelete.Flags().IntVar(&drainGracePeriodSeconds, "drain-graceperiod", common.DrainGracePeriodSeconds, "Period of time in seconds given to each pod to terminate gracefully. If negative, the default value specified in the pod will be used.")
 	machineCmdDelete.Flags().BoolVar(&drainDeleteLocalData, "drain-delete-local-data", common.DrainDeleteLocalData, "Continue even if there are pods using emptyDir (local data that will be deleted when the node is drained).")
+	machineCmdDelete.Flags().BoolVar(&drainForce, "drain-force", common.DrainForce, "Continue even if there are pods not managed by a ReplicationController, ReplicaSet, Job, DaemonSet or StatefulSet.")
 
 	machineCmdGet.Flags().String("ip", "", "IP of the machine")
 	getCmd.AddCommand(machineCmdGet)
