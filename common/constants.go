@@ -31,7 +31,6 @@ const (
 	DefaultFlannelVersion               = "v0.10.0"
 	DefaultKeepalivedVersion            = "v2.0.4"
 	DefaultEtcdVersion                  = "v3.3.8"
-	EtcdSnapshotRemotePath              = "/tmp/etcd.snapshot"
 	DockerKubeAPIServerNameFilter       = "name=k8s_kube-apiserver.*kube-system.*"
 	DockerRunningStatusFilter           = "status=running"
 	InstanceStatusAnnotationKey         = "instance-status"

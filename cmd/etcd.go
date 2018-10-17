@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/satori/go.uuid"
 	"io/ioutil"
 	"log"
 	"path/filepath"
@@ -33,7 +34,7 @@ var recoverEtcdCmd = &cobra.Command{
 		if err != nil {
 			log.Fatalf("Unable to parse `snapshot`: %v", err)
 		}
-		remotePath := common.EtcdSnapshotRemotePath
+		remotePath := strings.Join([]string{"/tmp/etcd.snapshot", uuid.NewV4().String()}, ".")
 
 		cluster, err := state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).Get(common.DefaultClusterName, metav1.GetOptions{})
 		if err != nil {
@@ -140,6 +141,12 @@ func recoverEtcd(localPath, remotePath string, etcdCASecret *corev1.Secret, clus
 	}
 	if err := insertClusterEtcdMember(firstEtcdMember, cluster); err != nil {
 		return fmt.Errorf("unable to update cluster status with etcd member %q: %v", firstEtcdMember, err)
+	}
+
+	// Delete the temporary file
+	log.Printf("[recover etcd] Removing temporary files")
+	if err := removeFile(remotePath, firstMWC.Client); err != nil {
+		return fmt.Errorf("unable to remove temporary files: %v ", err)
 	}
 
 	// Recover the other masters
@@ -383,7 +390,7 @@ var snapshotEtcdCmd = &cobra.Command{
 		if err != nil {
 			log.Fatalf("Unable to parse `snapshot`: %v", err)
 		}
-		remotePath := common.EtcdSnapshotRemotePath
+		remotePath := strings.Join([]string{"/tmp/etcd.snapshot", uuid.NewV4().String()}, ".")
 
 		machine, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).Get(ip, metav1.GetOptions{})
 		if err != nil {
@@ -410,7 +417,21 @@ var snapshotEtcdCmd = &cobra.Command{
 			log.Fatalf("Unable to download etcd snapshot: %v", err)
 		}
 		log.Printf("[snapshot] Downloaded snapshot to %q", localPath)
+
+		log.Printf("[snapshot] Removing temporary files")
+		if err := removeFile(remotePath, client); err != nil {
+			log.Fatalf("Unable to remove temporary files: %v ", err)
+		}
 	},
+}
+
+func removeFile(remotePath string, client sshmachine.Client) error {
+	cmd := fmt.Sprintf("rm -f %s", remotePath)
+	stdOut, stdErr, err := client.RunCommand(cmd)
+	if err != nil {
+		return fmt.Errorf("error running %q: %v (stdout: %q, stderr: %q)", cmd, err, string(stdOut), string(stdErr))
+	}
+	return nil
 }
 
 func createSnapshot(remotePath string, client sshmachine.Client) error {
@@ -435,6 +456,6 @@ func init() {
 	recoverCmd.AddCommand(recoverEtcdCmd)
 
 	snapshotEtcdCmd.Flags().String("ip", "", "IP of the machine used to create the etcd snapshot")
-	snapshotEtcdCmd.Flags().String("snapshot", "", "Path of the etcd snapshot used to recover the cluster.")
+	snapshotEtcdCmd.Flags().String("snapshot", "", "Path to save the etcd snapshot")
 	snapshotCmd.AddCommand(snapshotEtcdCmd)
 }
