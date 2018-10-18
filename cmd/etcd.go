@@ -34,7 +34,7 @@ var recoverEtcdCmd = &cobra.Command{
 		if err != nil {
 			log.Fatalf("Unable to parse `snapshot`: %v", err)
 		}
-		remotePath := strings.Join([]string{"/tmp/etcd.snapshot", uuid.NewV4().String()}, ".")
+		remotePath := fmt.Sprintf("%s-%s", "/tmp/cctl-etcd-snapshot", uuid.NewV4().String())
 
 		cluster, err := state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).Get(common.DefaultClusterName, metav1.GetOptions{})
 		if err != nil {
@@ -390,7 +390,7 @@ var snapshotEtcdCmd = &cobra.Command{
 		if err != nil {
 			log.Fatalf("Unable to parse `snapshot`: %v", err)
 		}
-		remotePath := strings.Join([]string{"/tmp/etcd.snapshot", uuid.NewV4().String()}, ".")
+		remotePath := fmt.Sprintf("%s-%s", "/tmp/cctl-etcd-snapshot", uuid.NewV4().String())
 
 		machine, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).Get(ip, metav1.GetOptions{})
 		if err != nil {
