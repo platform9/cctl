@@ -6,11 +6,12 @@ package machine
 
 import (
 	"fmt"
-	"log"
 	"path/filepath"
 	"strings"
 
 	"github.com/coreos/go-semver/semver"
+	log "github.com/platform9/ssh-provider/pkg/logrus"
+	"github.com/sirupsen/logrus"
 
 	"github.com/platform9/ssh-provider/pkg/controller"
 	"github.com/platform9/ssh-provider/pkg/machine"
@@ -41,9 +42,11 @@ type Actuator struct {
 	clusterClient        clusterclient.Interface
 	spClient             spclient.Interface
 	machineClientBuilder machineClientBuilder
+	logLevel             logrus.Level
 }
 
-func NewActuator(kubeClient kubernetes.Interface, clusterClient clusterclient.Interface, spClient spclient.Interface, machineClientBuilder machineClientBuilder, insecureIgnoreHostKey bool) *Actuator {
+func NewActuator(kubeClient kubernetes.Interface, clusterClient clusterclient.Interface, spClient spclient.Interface, machineClientBuilder machineClientBuilder, insecureIgnoreHostKey bool, logLevel logrus.Level) *Actuator {
+	log.SetLogLevel(logLevel)
 	return &Actuator{
 		InsecureIgnoreHostKey: insecureIgnoreHostKey,
 
@@ -51,6 +54,7 @@ func NewActuator(kubeClient kubernetes.Interface, clusterClient clusterclient.In
 		clusterClient:        clusterClient,
 		spClient:             spClient,
 		machineClientBuilder: machineClientBuilder,
+		logLevel:             logLevel,
 	}
 }
 

@@ -1,4 +1,3 @@
-
 /*
 Copyright 2018 Platform 9 Systems, Inc.
 
@@ -15,17 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-
 package provisionedmachine
 
 import (
-	"log"
+	log "github.com/platform9/ssh-provider/pkg/logrus"
 
 	"github.com/kubernetes-incubator/apiserver-builder/pkg/builders"
 
 	"github.com/platform9/ssh-provider/pkg/apis/sshprovider/v1alpha1"
-	"github.com/platform9/ssh-provider/pkg/controller/sharedinformers"
 	listers "github.com/platform9/ssh-provider/pkg/client/listers_generated/sshprovider/v1alpha1"
+	"github.com/platform9/ssh-provider/pkg/controller/sharedinformers"
 )
 
 // +controller:group=sshprovider,version=v1alpha1,kind=ProvisionedMachine,resource=provisionedmachines

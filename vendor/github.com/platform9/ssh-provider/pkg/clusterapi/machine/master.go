@@ -3,7 +3,8 @@ package machine
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+
+	log "github.com/platform9/ssh-provider/pkg/logrus"
 
 	"github.com/ghodss/yaml"
 
