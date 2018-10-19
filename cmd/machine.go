@@ -3,7 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	log "github.com/platform9/cctl/pkg/logrus"
 	"os"
 	"strconv"
 	"strings"

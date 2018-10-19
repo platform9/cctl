@@ -2,7 +2,7 @@ package util_test
 
 import (
 	"io/ioutil"
-	"log"
+	log "github.com/platform9/cctl/pkg/logrus"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"

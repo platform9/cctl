@@ -1,9 +1,9 @@
 package cmd
 
 import (
-	"log"
-	"github.com/spf13/cobra"
+	log "github.com/platform9/cctl/pkg/logrus"
 	"github.com/platform9/cctl/pkg/util/archive"
+	"github.com/spf13/cobra"
 )
 
 var restoreCmd = &cobra.Command{

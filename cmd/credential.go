@@ -2,7 +2,8 @@ package cmd
 
 import (
 	"io/ioutil"
-	"log"
+
+	log "github.com/platform9/cctl/pkg/logrus"
 
 	"github.com/platform9/cctl/common"
 

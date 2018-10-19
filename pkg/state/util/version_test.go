@@ -2,8 +2,9 @@ package util_test
 
 import (
 	"fmt"
-	"log"
 	"testing"
+
+	log "github.com/platform9/cctl/pkg/logrus"
 
 	stateutil "github.com/platform9/cctl/pkg/state/util"
 )

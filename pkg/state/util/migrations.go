@@ -1,7 +1,7 @@
 package util
 
 import (
-	"log"
+	log "github.com/platform9/cctl/pkg/logrus"
 
 	spv1 "github.com/platform9/ssh-provider/pkg/apis/sshprovider/v1alpha1"
 	sputil "github.com/platform9/ssh-provider/pkg/controller"

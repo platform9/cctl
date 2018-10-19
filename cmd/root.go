@@ -2,10 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
 
+	log "github.com/platform9/cctl/pkg/logrus"
 	cctlstate "github.com/platform9/cctl/pkg/state/v2"
+	"github.com/sirupsen/logrus"
 
 	spclientfake "github.com/platform9/ssh-provider/pkg/client/clientset_generated/clientset/fake"
 	"github.com/spf13/cobra"
@@ -15,9 +16,17 @@ import (
 
 var stateFilename string
 var state *cctlstate.State
+var LogLevel string
 
 var rootCmd = &cobra.Command{
 	Use: "cctl",
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		logLevel, err := logrus.ParseLevel(LogLevel)
+		if err != nil {
+			log.Fatalf("Could not parse log level %v", logLevel)
+		}
+		log.SetLogLevel(logLevel)
+	},
 	PreRun: func(cmd *cobra.Command, args []string) {
 		InitState()
 	},
@@ -35,6 +44,7 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&stateFilename, "state", "/etc/cctl-state.yaml", "state file")
+	rootCmd.PersistentFlags().StringVarP(&LogLevel, "log-level", "l", "info", "set log level for output, permitted values debug, info, warn, error, fatal and panic")
 }
 
 func InitState() {
