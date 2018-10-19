@@ -3,6 +3,7 @@ package logrus
 import (
 	"os"
 
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -11,17 +12,27 @@ var (
 	stdOut = log.New()
 	// used for error, fatal, panic
 	stdError = log.New()
-	logLevel log.Level
+	level    log.Level
 )
 
 // LogLevel returns the current log level
 func LogLevel() log.Level {
-	return logLevel
+	return level
+}
+
+// SetLogLevelUsingString sets level for both loggers
+func SetLogLevelUsingString(inputLevel string) error {
+	level, err := logrus.ParseLevel(inputLevel)
+	if err != nil {
+		return err
+	}
+	SetLogLevel(level)
+	return nil
 }
 
 // SetLogLevel sets level for both loggers
-func SetLogLevel(level log.Level) {
-	logLevel = level
+func SetLogLevel(inputLevel log.Level) {
+	level = inputLevel
 	stdOut.Out = os.Stdout
 	stdError.Out = os.Stderr
 	// used only for levels >= log.InfoLevel
