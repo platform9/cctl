@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"log"
+	log "github.com/platform9/cctl/pkg/logrus"
 
 	"github.com/spf13/cobra"
 

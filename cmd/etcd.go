@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/satori/go.uuid"
 	"io/ioutil"
-	"log"
+	log "github.com/platform9/cctl/pkg/logrus"
 	"path/filepath"
 	"strings"
 
