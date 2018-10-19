@@ -2,7 +2,8 @@ package machine
 
 import (
 	"fmt"
-	"log"
+
+	log "github.com/platform9/ssh-provider/pkg/logrus"
 
 	"github.com/ghodss/yaml"
 	"github.com/platform9/ssh-provider/pkg/controller"

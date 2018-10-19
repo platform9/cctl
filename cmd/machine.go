@@ -3,12 +3,13 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	log "github.com/platform9/cctl/pkg/logrus"
 	"os"
 	"strconv"
 	"strings"
 	"text/template"
 	"time"
+
+	log "github.com/platform9/cctl/pkg/logrus"
 
 	"golang.org/x/crypto/ssh"
 
@@ -195,6 +196,7 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 		state.SPClient,
 		machineClientBuilder,
 		insecureIgnoreHostKey,
+		log.LogLevel(),
 	)
 	if err = actuator.Create(cluster, newMachine); err != nil {
 		log.Fatalf("Unable to create machine: %v", err)
@@ -362,6 +364,7 @@ func deleteMachine(ip string, force bool, skipDrainDelete bool) {
 			state.SPClient,
 			machineClientBuilder,
 			insecureIgnoreHostKey,
+			log.LogLevel(),
 		)
 		log.Println("Deleting machine")
 		if err = actuator.Delete(cluster, targetMachine); err != nil {
@@ -741,6 +744,7 @@ func upgradeMachine(ip string) error {
 			state.SPClient,
 			machineClientBuilder,
 			insecureIgnoreHostKey,
+			log.LogLevel(),
 		)
 
 		// If goal machine is a node we would have to update the token

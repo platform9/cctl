@@ -11,17 +11,10 @@ var (
 	stdOut = log.New()
 	// used for error, fatal, panic
 	stdError = log.New()
-	logLevel log.Level
 )
-
-// LogLevel returns the current log level
-func LogLevel() log.Level {
-	return logLevel
-}
 
 // SetLogLevel sets level for both loggers
 func SetLogLevel(level log.Level) {
-	logLevel = level
 	stdOut.Out = os.Stdout
 	stdError.Out = os.Stderr
 	// used only for levels >= log.InfoLevel

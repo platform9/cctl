@@ -321,7 +321,7 @@
   version = "v1.8.0"
 
 [[projects]]
-  branch = "master"
+  branch = "private/logging-verbosity"
   name = "github.com/platform9/ssh-provider"
   packages = [
     "constants",
@@ -343,12 +343,13 @@
     "pkg/controller",
     "pkg/controller/provisionedmachine",
     "pkg/controller/sharedinformers",
+    "pkg/logrus",
     "pkg/machine",
     "pkg/nodeadm",
     "pkg/util/semver",
     "pkg/util/sets"
   ]
-  revision = "7f4932c20485e180de96a1d48efe2182a0214763"
+  revision = "a3bb31f48cea51dad48fcabe362227dbd11f663e"
 
 [[projects]]
   name = "github.com/prometheus/client_golang"
@@ -904,6 +905,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "bca6a8bccc11273b8a8cee1400c6775322dfd519d30f116dd50405622affb1f9"
+  inputs-digest = "07acad6b8415d390d1e7bee7c52ea29f6e18898c445aee31ed8758bf59ddda0b"
   solver-name = "gps-cdcl"
   solver-version = 1
