@@ -19,6 +19,13 @@ import (
 var migrateCmd = &cobra.Command{
 	Use:   "migrate",
 	Short: "Migrate the state file to the current version",
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// PersistentPreRuns are not chained https://github.com/spf13/cobra/issues/216
+		// Therefore LogLevel must be set in all the PersistentPreRuns
+		if err := log.SetLogLevelUsingString(LogLevel); err != nil {
+			log.Fatalf("Unable to parse log level %s", LogLevel)
+		}
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		version, err := stateutil.VersionFromFile(stateFilename)
 		if err != nil {

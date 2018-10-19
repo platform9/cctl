@@ -11,6 +11,11 @@ var restoreCmd = &cobra.Command{
 	Short: "Restore the cctl state and etcd snapshot from an archive.",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		InitState()
+		// PersistentPreRuns are not chained https://github.com/spf13/cobra/issues/216
+		// Therefore LogLevel must be set in all the PersistentPreRuns
+		if err := log.SetLogLevelUsingString(LogLevel); err != nil {
+			log.Fatalf("Unable to parse log level %s", LogLevel)
+		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		archivePath, err := cmd.Flags().GetString("archive")
