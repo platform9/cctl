@@ -23,6 +23,7 @@ type Client interface {
 	MoveFile(srcFilePath, dstFilePath string) error
 	CopyFile(srcFilePath, dstFilePath string) error
 	Exists(filePath string) (bool, error)
+	RemoveFile(path string) error
 }
 
 type client struct {
@@ -213,4 +214,14 @@ func (c *client) Exists(path string) (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+// RemoveFile removes the file specified by path
+func (c *client) RemoveFile(path string) error {
+	cmd := fmt.Sprintf("rm -f %s", path)
+	_, _, err := c.RunCommand(cmd)
+	if err != nil {
+		return fmt.Errorf("unable to remove file %q: %s", path, err)
+	}
+	return nil
 }
