@@ -236,12 +236,23 @@
   version = "1.0.1"
 
 [[projects]]
+<<<<<<< HEAD
   name = "github.com/konsorten/go-windows-terminal-sequences"
   packages = ["."]
+=======
+  digest = "1:0a69a1c0db3591fcefb47f115b224592c8dfa4368b7ba9fae509d5e16cdc95c8"
+  name = "github.com/konsorten/go-windows-terminal-sequences"
+  packages = ["."]
+  pruneopts = "UT"
+>>>>>>> Update vendor
   revision = "5c8c8bd35d3832f5d134ae1e1e375b69a4d25242"
   version = "v1.0.1"
 
 [[projects]]
+<<<<<<< HEAD
+=======
+  digest = "1:9cedee824c21326bd26950bd9e1ffe9dc4e7ca03dc8634d0e6f954ee6a383172"
+>>>>>>> Update vendor
   name = "github.com/kr/fs"
   packages = ["."]
   revision = "1455def202f6e05b95cc7bfc7e8ae67ae5141eba"
@@ -322,6 +333,10 @@
 
 [[projects]]
   branch = "master"
+<<<<<<< HEAD
+=======
+  digest = "1:590cb9f608ec69e08107975151f6ee089460ff01181fe1bdf3d8d6893e732101"
+>>>>>>> Update vendor
   name = "github.com/platform9/ssh-provider"
   packages = [
     "constants",
@@ -349,6 +364,10 @@
     "pkg/util/semver",
     "pkg/util/sets"
   ]
+<<<<<<< HEAD
+=======
+  pruneopts = "UT"
+>>>>>>> Update vendor
   revision = "e457416e2255e96a1cc413e3e127132dcbd438a6"
 
 [[projects]]
@@ -391,12 +410,23 @@
   version = "v1.2.0"
 
 [[projects]]
+<<<<<<< HEAD
   name = "github.com/sirupsen/logrus"
   packages = ["."]
+=======
+  digest = "1:3f53e9e4dfbb664cd62940c9c4b65a2171c66acd0b7621a1a6b8e78513525a52"
+  name = "github.com/sirupsen/logrus"
+  packages = ["."]
+  pruneopts = "UT"
+>>>>>>> Update vendor
   revision = "ad15b42461921f1fb3529b058c6786c6a45d5162"
   version = "v1.1.1"
 
 [[projects]]
+<<<<<<< HEAD
+=======
+  digest = "1:645cabccbb4fa8aab25a956cbcbdf6a6845ca736b2c64e197ca7cbb9d210b939"
+>>>>>>> Update vendor
   name = "github.com/spf13/cobra"
   packages = ["."]
   revision = "ef82de70bb3f60c65fb8eebacbb2d122ef517385"
