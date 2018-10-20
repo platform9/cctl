@@ -145,7 +145,7 @@ func recoverEtcd(localPath, remotePath string, etcdCASecret *corev1.Secret, clus
 
 	// Delete the temporary file
 	log.Printf("[recover etcd] Removing temporary files")
-	if err := removeFile(remotePath, firstMWC.Client); err != nil {
+	if err := firstMWC.Client.RemoveFile(remotePath); err != nil {
 		return fmt.Errorf("unable to remove temporary files: %v ", err)
 	}
 
@@ -419,19 +419,10 @@ var snapshotEtcdCmd = &cobra.Command{
 		log.Printf("[snapshot] Downloaded snapshot to %q", localPath)
 
 		log.Printf("[snapshot] Removing temporary files")
-		if err := removeFile(remotePath, client); err != nil {
+		if err := client.RemoveFile(remotePath); err != nil {
 			log.Fatalf("Unable to remove temporary files: %v ", err)
 		}
 	},
-}
-
-func removeFile(remotePath string, client sshmachine.Client) error {
-	cmd := fmt.Sprintf("rm -f %s", remotePath)
-	stdOut, stdErr, err := client.RunCommand(cmd)
-	if err != nil {
-		return fmt.Errorf("error running %q: %v (stdout: %q, stderr: %q)", cmd, err, string(stdOut), string(stdErr))
-	}
-	return nil
 }
 
 func createSnapshot(remotePath string, client sshmachine.Client) error {
