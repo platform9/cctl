@@ -126,7 +126,7 @@ func recoverEtcd(localPath, remotePath string, etcdCASecret *corev1.Secret, clus
 
 	// Recover the first master
 	log.Printf("[recover etcd] Initializing new etcd cluster from snapshot on master %q", firstMWC.Machine.Name)
-	if err := writeEtcdSnapshot(localPath, remotePath, firstMWC.Client); err != nil {
+	if err := writeRemoteFile(localPath, remotePath, firstMWC.Client); err != nil {
 		return fmt.Errorf("unable to write etcd snapshot to machine %q: %v", firstMWC.Machine.Name, err)
 	}
 	if err := etcdadmInitFromSnapshot(remotePath, firstMWC.Client); err != nil {
@@ -239,7 +239,7 @@ func resetEtcdSkipRemoveMember(client sshmachine.Client) error {
 	return nil
 }
 
-func writeEtcdSnapshot(localPath, remotePath string, client sshmachine.Client) error {
+func writeRemoteFile(localPath, remotePath string, client sshmachine.Client) error {
 	b, err := ioutil.ReadFile(localPath)
 	if err != nil {
 		return fmt.Errorf("unable to read etcd snapshot %q: %v", localPath, err)
@@ -413,7 +413,7 @@ var snapshotEtcdCmd = &cobra.Command{
 			log.Fatalf("Unable to create etcd snapshot: %v", err)
 		}
 		log.Println("[snapshot] Downloading snapshot")
-		if err := downloadSnapshot(remotePath, localPath, client); err != nil {
+		if err := downloadRemoteFile(remotePath, localPath, client); err != nil {
 			log.Fatalf("Unable to download etcd snapshot: %v", err)
 		}
 		log.Printf("[snapshot] Downloaded snapshot to %q", localPath)
@@ -434,7 +434,7 @@ func createSnapshot(remotePath string, client sshmachine.Client) error {
 	return nil
 }
 
-func downloadSnapshot(remotePath, localPath string, client sshmachine.Client) error {
+func downloadRemoteFile(remotePath, localPath string, client sshmachine.Client) error {
 	snapshotBytes, err := client.ReadFile(remotePath)
 	if err != nil {
 		return err
