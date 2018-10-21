@@ -45,6 +45,8 @@ const (
 	KubeAPIServerServiceNodePortRange   = "80-32767"
 	KubeAPIServerAllowPrivileged        = "true"
 	KubeControllerMgrPodEvictionTimeout = "20s"
+	DashcamCommandPath                  = "/opt/bin/dashcam"
+	SupportBundleFileNamePrefix         = "support-bundle"
 	ClusterV1PrintTemplate              = `Cluster Information
 ------- ------------
 Cluster Name       : {{ .Cluster.ObjectMeta.Name}}
