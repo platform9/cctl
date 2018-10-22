@@ -3,11 +3,12 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/satori/go.uuid"
 	"io/ioutil"
-	log "github.com/platform9/cctl/pkg/logrus"
 	"path/filepath"
 	"strings"
+
+	log "github.com/platform9/cctl/pkg/logrus"
+	"github.com/satori/go.uuid"
 
 	"github.com/spf13/cobra"
 
@@ -242,7 +243,7 @@ func resetEtcdSkipRemoveMember(client sshmachine.Client) error {
 func writeRemoteFile(localPath, remotePath string, client sshmachine.Client) error {
 	b, err := ioutil.ReadFile(localPath)
 	if err != nil {
-		return fmt.Errorf("unable to read etcd snapshot %q: %v", localPath, err)
+		return fmt.Errorf("unable to read local file %q: %v", localPath, err)
 	}
 	return client.WriteFile(remotePath, 0600, b)
 }

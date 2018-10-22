@@ -77,8 +77,7 @@ var bundleCmd = &cobra.Command{
 			log.Fatalf("Failed to create support bundle %q: %v (stdout: %q, stderr: %q)", command, err, string(stdOut), string(stdErr))
 		}
 		defer targetMachineClient.RemoveFile(remotePath)
-		err = downloadRemoteFile(remotePath, localPath, targetMachineClient)
-		if err != nil {
+		if err = downloadRemoteFile(remotePath, localPath, targetMachineClient); err != nil {
 			log.Fatalf("Failed to download support bundle: %v", err)
 		}
 		log.Infof("Support bundle downloaded to %s ", localPath)
