@@ -908,6 +908,49 @@ var machineCmdUpgrade = &cobra.Command{
 	},
 }
 
+var machineBundleCmd = &cobra.Command{
+	Use:   "machine",
+	Short: "Create a support bundle for a node",
+	Run: func(cmd *cobra.Command, args []string) {
+		ip := cmd.Flag("ip").Value.String()
+		targetMachine, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).Get(ip, metav1.GetOptions{})
+		if err != nil {
+			log.Fatalf("Unable to get machine %q: %v", ip, err)
+		}
+		targetMachineSpec, err := sputil.GetMachineSpec(*targetMachine)
+		if err != nil {
+			log.Fatalf("Unable to decode machine %q spec: %v", targetMachine.Name, err)
+		}
+		targetProvisionedMachine, err := state.SPClient.SshproviderV1alpha1().ProvisionedMachines(common.DefaultNamespace).Get(targetMachineSpec.ProvisionedMachineName, metav1.GetOptions{})
+		if err != nil {
+			log.Fatalf("Unable to get provisioned machine %q: %v", targetMachineSpec.ProvisionedMachineName, err)
+		}
+		targetMachineClient, err := sshMachineClientFromSSHConfig(targetProvisionedMachine.Spec.SSHConfig)
+		if err != nil {
+			log.Fatalf("unable to create machine client for machine %q: %v", targetMachine.Name, err)
+		}
+		t := time.Now()
+
+		bundleFileBaseName := fmt.Sprintf("%s-%s-%s.tgz", common.SupportBundleFileNamePrefix, ip, t.Format(time.RFC3339))
+		localPath := cmd.Flag("output").Value.String()
+		if len(localPath) == 0 {
+			localPath = bundleFileBaseName
+		}
+		remotePath := fmt.Sprintf("/tmp/%s", bundleFileBaseName)
+		command := fmt.Sprintf("%s bundle --output %s", common.DashcamCommandPath, remotePath)
+		log.Printf("Started creating support bundle for %s. This will take a few minutes.", ip)
+		stdOut, stdErr, err := targetMachineClient.RunCommand(command)
+		if err != nil {
+			log.Fatalf("Failed to create support bundle %q: %v (stdout: %q, stderr: %q)", command, err, string(stdOut), string(stdErr))
+		}
+		defer targetMachineClient.RemoveFile(remotePath)
+		if err = downloadRemoteFile(remotePath, localPath, targetMachineClient); err != nil {
+			log.Fatalf("Failed to download support bundle: %v", err)
+		}
+		log.Infof("cctl bundle downloaded to %s ", localPath)
+	},
+}
+
 func init() {
 	createCmd.AddCommand(machineCmdCreate)
 	machineCmdCreate.Flags().String("ip", "", "IP of the machine")
@@ -931,4 +974,9 @@ func init() {
 
 	machineCmdUpgrade.Flags().String("ip", "", "IP of the machine")
 	upgradeCmd.AddCommand(machineCmdUpgrade)
+
+	bundleCmd.AddCommand(machineBundleCmd)
+	machineBundleCmd.Flags().String("output", "", fmt.Sprintf("File path for bundle tgz file (default \"%s-<ip>-<timestamp>.tgz\" created in current directory)", common.SupportBundleFileNamePrefix))
+	machineBundleCmd.Flags().String("ip", "", "IP address of the machine")
+	machineBundleCmd.MarkFlagRequired("ip")
 }
