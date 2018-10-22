@@ -46,7 +46,7 @@ const (
 	KubeAPIServerAllowPrivileged        = "true"
 	KubeControllerMgrPodEvictionTimeout = "20s"
 	DashcamCommandPath                  = "/opt/bin/dashcam"
-	SupportBundleFileNamePrefix         = "support-bundle"
+	SupportBundleFileNamePrefix         = "cctl-bundle"
 	ClusterV1PrintTemplate              = `Cluster Information
 ------- ------------
 Cluster Name       : {{ .Cluster.ObjectMeta.Name}}
