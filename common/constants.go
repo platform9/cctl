@@ -45,6 +45,7 @@ const (
 	KubeAPIServerServiceNodePortRange   = "80-32767"
 	KubeAPIServerAllowPrivileged        = "true"
 	KubeControllerMgrPodEvictionTimeout = "20s"
+	DashcamBundleBaseDir                = "/var/tmp"
 	DashcamCommandPath                  = "/opt/bin/dashcam"
 	SupportBundleFileNamePrefix         = "cctl-bundle"
 	ClusterV1PrintTemplate              = `Cluster Information
