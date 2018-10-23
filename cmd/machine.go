@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"text/template"
@@ -936,7 +937,7 @@ var machineBundleCmd = &cobra.Command{
 		if len(localPath) == 0 {
 			localPath = bundleFileBaseName
 		}
-		remotePath := fmt.Sprintf("/tmp/%s", bundleFileBaseName)
+		remotePath := path.Join(common.DashcamBundleBaseDir, bundleFileBaseName)
 		command := fmt.Sprintf("%s bundle --output %s", common.DashcamCommandPath, remotePath)
 		log.Printf("Started creating support bundle for %s. This will take a few minutes.", ip)
 		stdOut, stdErr, err := targetMachineClient.RunCommand(command)
