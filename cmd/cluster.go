@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	log "github.com/platform9/cctl/pkg/logrus"
 	"os"
 	"strconv"
 	"strings"
 	"text/template"
+
+	log "github.com/platform9/cctl/pkg/logrus"
 
 	"github.com/coreos/go-semver/semver"
 	"github.com/ghodss/yaml"
@@ -37,11 +38,20 @@ var clusterCmdCreate = &cobra.Command{
 	Use:   "cluster",
 	Short: "Creates clusterspec in the current directory",
 	Run: func(cmd *cobra.Command, args []string) {
-		routerID, err := strconv.Atoi(cmd.Flag("routerID").Value.String())
-		if err != nil {
-			log.Fatalf("Invalid routerId %v", err)
-		}
+
 		vip := cmd.Flag("vip").Value.String()
+		routerIDFlag := cmd.Flag("routerID").Value.String()
+		var routerID int
+		var err error
+		if (len(routerIDFlag) == 0) != (len(vip) == 0) {
+			log.Fatalf("Must specify both routerID and vip")
+		} else if len(vip) != 0 {
+			routerID, err = strconv.Atoi(routerIDFlag)
+			if err != nil {
+				log.Fatalf("Invalid routerID %v", err)
+			}
+		}
+
 		servicesCIDR := cmd.Flag("serviceNetwork").Value.String()
 		podsCIDR := cmd.Flag("podNetwork").Value.String()
 		saPrivateKeyFile := cmd.Flag("saPrivateKey").Value.String()
@@ -654,8 +664,6 @@ func init() {
 	clusterCmdCreate.Flags().String("saPrivateKey", "", "Location of file containing private key used for signing service account tokens")
 	clusterCmdCreate.Flags().String("saPublicKey", "", "Location of file containing public key used for signing service account tokens")
 	clusterCmdCreate.Flags().String("cluster-config", "", "Location of file containing configurable parameters for the cluster")
-	clusterCmdCreate.MarkFlagRequired("vip")
-	clusterCmdCreate.MarkFlagRequired("routerID")
 	//clusterCmdCreate.Flags().String("version", "1.10.2", "Kubernetes version")
 
 	deleteCmd.AddCommand(clusterCmdDelete)
