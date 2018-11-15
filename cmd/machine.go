@@ -149,10 +149,9 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 		log.Fatalf("Unable to get cluster: %v", err)
 	}
 
-	// Check if master exists already && if no vip, if so disallow creation
-
 	cspec, err := sputil.GetClusterSpec(*cluster)
 	vipconf := cspec.VIPConfiguration
+	// If no vip exists, check if other masters exist before creating a new one.
 	if role == clustercommon.MasterRole && vipconf.IP == "" {
 		machineList, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).List(metav1.ListOptions{})
 		if err != nil {
