@@ -153,16 +153,9 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 	vipconf := cspec.VIPConfiguration
 	// If no vip exists, check if other masters exist before creating a new one.
 	if role == clustercommon.MasterRole && vipconf.IP == "" {
-		machineList, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).List(metav1.ListOptions{})
+		_, _, err = masterMachineAndProvisionedMachine()
 		if err != nil {
-			log.Fatalf("unable to list machines: %v", err)
-		}
-
-		//Check if any of the machines are masters
-		for _, machine := range machineList.Items {
-			if clusterutil.RoleContains(clustercommon.MasterRole, machine.Spec.Roles) {
-				log.Fatal("Unable to create machine. This is a single master cluster.")
-			}
+			log.Fatal("Unable to create machine. This is a single master cluster.")
 		}
 	}
 
