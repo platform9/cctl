@@ -45,7 +45,7 @@ var clusterCmdCreate = &cobra.Command{
 		var err error
 		// Verify that both routerID and vip are not empty if one is specified
 		if (len(routerIDFlag) == 0) != (len(vip) == 0) {
-			log.Fatalf("Must specify both routerID and vip, or leave both empty of non-HA clusters.")
+			log.Fatalf("Must specify both routerID and vip, or leave both empty for non-HA cluster.")
 		} else if len(vip) != 0 {
 			routerID, err = strconv.Atoi(routerIDFlag)
 			if err != nil {
