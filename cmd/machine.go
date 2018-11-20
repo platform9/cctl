@@ -154,7 +154,7 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 	// If no vip exists, check if other masters exist before creating a new one.
 	if role == clustercommon.MasterRole && vipconf.IP == "" {
 		_, _, err = masterMachineAndProvisionedMachine()
-		if err != nil {
+		if err == nil {
 			log.Fatal("Unable to create machine. This is a single master cluster.")
 		}
 	}

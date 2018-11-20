@@ -8,6 +8,7 @@ const (
 	DrainGracePeriodSeconds             = -1
 	DrainDeleteLocalData                = false
 	DrainForce                          = false
+	RouterID                            = -1
 	MasterRole                          = "master"
 	NodeRole                            = "node"
 	DefaultSSHPort                      = 22
