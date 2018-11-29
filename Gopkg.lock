@@ -411,8 +411,8 @@
   version = "v1.8.0"
 
 [[projects]]
-  branch = "private/ojas/optional-vip"
-  digest = "1:874805a31fe2603aaedbe5b2822af5544748d860739c67dd6aa09aa26041cb87"
+  branch = "master"
+  digest = "1:4ec8b16c690539ec1e96c9bf0c8cec283540a02e04bb96f310a0d6cad2492255"
   name = "github.com/platform9/ssh-provider"
   packages = [
     "constants",
@@ -441,7 +441,7 @@
     "pkg/util/sets",
   ]
   pruneopts = "UT"
-  revision = "84cfb9fb056e0db98f8e1091759a1408f7f5b5a3"
+  revision = "03de99a1bbc5b9cc94e1b57c33f67a6ff2a23b29"
 
 [[projects]]
   digest = "1:b6221ec0f8903b556e127c449e7106b63e6867170c2d10a7c058623d086f2081"
