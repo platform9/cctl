@@ -148,6 +148,17 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 		}
 		log.Fatalf("Unable to get cluster: %v", err)
 	}
+
+	cspec, err := sputil.GetClusterSpec(*cluster)
+	vipconf := cspec.VIPConfiguration
+	// If no vip exists, check if other masters exist before creating a new one.
+	if role == clustercommon.MasterRole && vipconf.IP == "" {
+		_, _, err = masterMachineAndProvisionedMachine()
+		if err == nil {
+			log.Fatal("Unable to create machine. This is a single master cluster.")
+		}
+	}
+
 	sshCredentialSecret, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Get(common.DefaultSSHCredentialSecretName, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {

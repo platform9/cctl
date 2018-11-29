@@ -80,7 +80,8 @@ func InitConfigurationForMachine(cluster clusterv1.Cluster, machine clusterv1.Ma
 	}
 
 	// MasterConfiguration
-	if cpc.VIPConfiguration != nil {
+	if cpc.VIPConfiguration.IP != "" {
+		// If ControlPlaneEndpoint is not specified, kubeadm will use AdvertiseAddress + BindPort.
 		cfg.MasterConfiguration.API.ControlPlaneEndpoint = cpc.VIPConfiguration.IP
 		cfg.MasterConfiguration.APIServerCertSANs = []string{cpc.VIPConfiguration.IP}
 	} // else: kubeadm will set defaults

@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	log "github.com/platform9/cctl/pkg/logrus"
 	"os"
 	"strconv"
 	"strings"
 	"text/template"
+
+	log "github.com/platform9/cctl/pkg/logrus"
 
 	"github.com/coreos/go-semver/semver"
 	"github.com/ghodss/yaml"
@@ -30,18 +31,28 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
-var forceDelete bool
+var (
+	forceDelete bool
+	routerID    int
+)
 
 // clusterCmd represents the cluster command
 var clusterCmdCreate = &cobra.Command{
 	Use:   "cluster",
 	Short: "Creates clusterspec in the current directory",
 	Run: func(cmd *cobra.Command, args []string) {
-		routerID, err := strconv.Atoi(cmd.Flag("routerID").Value.String())
-		if err != nil {
-			log.Fatalf("Invalid routerId %v", err)
-		}
+
 		vip := cmd.Flag("vip").Value.String()
+
+		// Verify that both routerID and vip are not defaults if one is specified
+		if (routerID == common.RouterID) != (len(vip) == 0) {
+			log.Fatalf("Must specify both routerID and vip, or leave both empty for non-HA cluster.")
+		} else if len(vip) != 0 {
+			if routerID > 255 || routerID < 0 {
+				log.Fatal("Must specify a routerID between [0,255].")
+			}
+		}
+
 		servicesCIDR := cmd.Flag("serviceNetwork").Value.String()
 		podsCIDR := cmd.Flag("podNetwork").Value.String()
 		saPrivateKeyFile := cmd.Flag("saPrivateKey").Value.String()
@@ -65,6 +76,7 @@ var clusterCmdCreate = &cobra.Command{
 			log.Fatalf("Must specify both --front-proxy-ca-cert and --front-proxy-ca-key")
 		}
 		clusterConfig := &spv1.ClusterConfig{}
+		var err error
 		clusterConfigFile := cmd.Flag("cluster-config").Value.String()
 		if len(clusterConfigFile) != 0 {
 			clusterConfig, err = parseClusterConfigFromFile(clusterConfigFile)
@@ -644,7 +656,7 @@ func init() {
 	clusterCmdCreate.Flags().String("serviceNetwork", "10.1.0.0/16", "Network CIDR for services e.g. 10.1.0.0/16")
 	clusterCmdCreate.Flags().String("podNetwork", "10.2.0.0/16", "Network CIDR for pods e.g. 10.2.0.0.16")
 	clusterCmdCreate.Flags().String("vip", "", "Virtual IP to be used for multi master setup")
-	clusterCmdCreate.Flags().String("routerID", "", "Virtual router ID for keepalived for multi master setup. Must be in the range [0, 254]. Must be unique within a single L2 network domain.")
+	clusterCmdCreate.Flags().IntVar(&routerID, "routerID", common.RouterID, "Virtual router ID for keepalived for multi master setup. Must be in the range [0, 254]. Must be unique within a single L2 network domain.")
 	clusterCmdCreate.Flags().String("apiserver-ca-cert", "", "The API Server CA certificate. Used to sign kubelet certificate requests and verify client certificates.")
 	clusterCmdCreate.Flags().String("apiserver-ca-key", "", "The API Server CA certificate key.")
 	clusterCmdCreate.Flags().String("etcd-ca-cert", "", "The etcd CA certificate. Used to sign and verify client and peer certificates.")
@@ -654,8 +666,6 @@ func init() {
 	clusterCmdCreate.Flags().String("saPrivateKey", "", "Location of file containing private key used for signing service account tokens")
 	clusterCmdCreate.Flags().String("saPublicKey", "", "Location of file containing public key used for signing service account tokens")
 	clusterCmdCreate.Flags().String("cluster-config", "", "Location of file containing configurable parameters for the cluster")
-	clusterCmdCreate.MarkFlagRequired("vip")
-	clusterCmdCreate.MarkFlagRequired("routerID")
 	//clusterCmdCreate.Flags().String("version", "1.10.2", "Kubernetes version")
 
 	deleteCmd.AddCommand(clusterCmdDelete)
