@@ -46,19 +46,19 @@ var clusterCmdCreate = &cobra.Command{
 
 		// Verify that both routerID and vip are not defaults if one is specified
 		if (routerID == common.RouterID) != (len(vip) == 0) {
-			log.Fatalf("Must specify both routerID and vip, or leave both empty for non-HA cluster.")
+			log.Fatalf("Must specify both router-id and vip, or leave both empty for non-HA cluster.")
 		} else if len(vip) != 0 {
 			if routerID > 255 || routerID < 0 {
-				log.Fatal("Must specify a routerID between [0,255].")
+				log.Fatal("Must specify a router-id between [0,255].")
 			}
 		}
 
-		servicesCIDR := cmd.Flag("serviceNetwork").Value.String()
-		podsCIDR := cmd.Flag("podNetwork").Value.String()
-		saPrivateKeyFile := cmd.Flag("saPrivateKey").Value.String()
-		saPublicKeyFile := cmd.Flag("saPublicKey").Value.String()
+		servicesCIDR := cmd.Flag("service-network").Value.String()
+		podsCIDR := cmd.Flag("pod-network").Value.String()
+		saPrivateKeyFile := cmd.Flag("sa-private-key").Value.String()
+		saPublicKeyFile := cmd.Flag("sa-public-key").Value.String()
 		if (len(saPrivateKeyFile) == 0) != (len(saPublicKeyFile) == 0) {
-			log.Fatalf("Must specify both saPrivateKey and saPublicKey")
+			log.Fatalf("Must specify both sa-private-key and sa-public-key")
 		}
 		apiServerCACertFile := cmd.Flag("apiserver-ca-cert").Value.String()
 		apiServerCAKeyFile := cmd.Flag("apiserver-ca-key").Value.String()
@@ -653,18 +653,18 @@ var clusterCmdUpgrade = &cobra.Command{
 
 func init() {
 	createCmd.AddCommand(clusterCmdCreate)
-	clusterCmdCreate.Flags().String("serviceNetwork", "10.1.0.0/16", "Network CIDR for services e.g. 10.1.0.0/16")
-	clusterCmdCreate.Flags().String("podNetwork", "10.2.0.0/16", "Network CIDR for pods e.g. 10.2.0.0.16")
+	clusterCmdCreate.Flags().String("service-network", "10.1.0.0/16", "Network CIDR for services e.g. 10.1.0.0/16")
+	clusterCmdCreate.Flags().String("pod-network", "10.2.0.0/16", "Network CIDR for pods e.g. 10.2.0.0.16")
 	clusterCmdCreate.Flags().String("vip", "", "Virtual IP to be used for multi master setup")
-	clusterCmdCreate.Flags().IntVar(&routerID, "routerID", common.RouterID, "Virtual router ID for keepalived for multi master setup. Must be in the range [0, 254]. Must be unique within a single L2 network domain.")
+	clusterCmdCreate.Flags().IntVar(&routerID, "router-id", common.RouterID, "Virtual router ID for keepalived for multi master setup. Must be in the range [0, 254]. Must be unique within a single L2 network domain.")
 	clusterCmdCreate.Flags().String("apiserver-ca-cert", "", "The API Server CA certificate. Used to sign kubelet certificate requests and verify client certificates.")
 	clusterCmdCreate.Flags().String("apiserver-ca-key", "", "The API Server CA certificate key.")
 	clusterCmdCreate.Flags().String("etcd-ca-cert", "", "The etcd CA certificate. Used to sign and verify client and peer certificates.")
 	clusterCmdCreate.Flags().String("etcd-ca-key", "", "The etcd CA certificate key.")
 	clusterCmdCreate.Flags().String("front-proxy-ca-cert", "", "The front proxy CA certificate. Used to verify client certificates on incoming requests.")
 	clusterCmdCreate.Flags().String("front-proxy-ca-key", "", "The front proxy CA certificate key.")
-	clusterCmdCreate.Flags().String("saPrivateKey", "", "Location of file containing private key used for signing service account tokens")
-	clusterCmdCreate.Flags().String("saPublicKey", "", "Location of file containing public key used for signing service account tokens")
+	clusterCmdCreate.Flags().String("sa-private-key", "", "Location of file containing private key used for signing service account tokens")
+	clusterCmdCreate.Flags().String("sa-public-key", "", "Location of file containing public key used for signing service account tokens")
 	clusterCmdCreate.Flags().String("cluster-config", "", "Location of file containing configurable parameters for the cluster")
 	//clusterCmdCreate.Flags().String("version", "1.10.2", "Kubernetes version")
 
@@ -674,7 +674,7 @@ func init() {
 	getCmd.AddCommand(clusterCmdGet)
 	upgradeCmd.AddCommand(clusterCmdUpgrade)
 	clusterCmdUpgrade.Flags().DurationVar(&drainTimeout, "drain-timeout", common.DrainTimeout, "The length of time to wait before giving up, zero means infinite")
-	clusterCmdUpgrade.Flags().IntVar(&drainGracePeriodSeconds, "drain-graceperiod", common.DrainGracePeriodSeconds, "Period of time in seconds given to each pod to terminate gracefully. If negative, the default value specified in the pod will be used.")
+	clusterCmdUpgrade.Flags().IntVar(&drainGracePeriodSeconds, "drain-grace-period", common.DrainGracePeriodSeconds, "Period of time in seconds given to each pod to terminate gracefully. If negative, the default value specified in the pod will be used.")
 	clusterCmdUpgrade.Flags().BoolVar(&drainDeleteLocalData, "drain-delete-local-data", common.DrainDeleteLocalData, "Continue even if there are pods using emptyDir (local data that will be deleted when the node is drained).")
 	clusterCmdUpgrade.Flags().BoolVar(&drainForce, "drain-force", common.DrainForce, "Continue even if there are pods not managed by a ReplicationController, ReplicaSet, Job, DaemonSet or StatefulSet.")
 }

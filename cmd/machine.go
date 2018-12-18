@@ -252,9 +252,9 @@ var machineCmdCreate = &cobra.Command{
 		if err != nil {
 			log.Fatalf("Invalid port %v", err)
 		}
-		publicKeyFiles, err := cmd.Flags().GetStringSlice("publicKeys")
+		publicKeyFiles, err := cmd.Flags().GetStringSlice("public-keys")
 		if err != nil {
-			log.Fatalf("Unable to parse `publicKeys`: %v", err)
+			log.Fatalf("Unable to parse `public-keys`: %v", err)
 		}
 		createMachine(ip, port, iface, role, publicKeyFiles)
 	},
@@ -968,8 +968,8 @@ func init() {
 	machineCmdCreate.Flags().String("ip", "", "IP of the machine")
 	machineCmdCreate.Flags().Int("port", common.DefaultSSHPort, "SSH port")
 	machineCmdCreate.Flags().String("role", "", "Role of the machine. Can be master/node")
-	machineCmdCreate.Flags().StringSlice("publicKeys", []string{}, "The machine's SSH public keys. Provide a comma-separated list, or define multiple flags.")
-	machineCmdCreate.Flags().String("sshSecretName", "sshSecret", "Name of the sshSecret to use")
+	machineCmdCreate.Flags().StringSlice("public-keys", []string{}, "The machine's SSH public keys. Provide a comma-separated list, or define multiple flags.")
+	machineCmdCreate.Flags().String("ssh-secret-name", "sshSecret", "Name of the sshSecret to use")
 	machineCmdCreate.Flags().String("iface", "eth0", "Interface that keepalived will bind to in case of master")
 
 	deleteCmd.AddCommand(machineCmdDelete)
@@ -977,7 +977,7 @@ func init() {
 	machineCmdDelete.Flags().Bool("force", false, "Force delete the machine")
 	machineCmdDelete.Flags().Bool("skip-drain-delete", false, "Do not drain and delete the cluster node for the machine")
 	machineCmdDelete.Flags().DurationVar(&drainTimeout, "drain-timeout", common.DrainTimeout, "The length of time to wait before giving up, zero means infinite")
-	machineCmdDelete.Flags().IntVar(&drainGracePeriodSeconds, "drain-graceperiod", common.DrainGracePeriodSeconds, "Period of time in seconds given to each pod to terminate gracefully. If negative, the default value specified in the pod will be used.")
+	machineCmdDelete.Flags().IntVar(&drainGracePeriodSeconds, "drain-grace-period", common.DrainGracePeriodSeconds, "Period of time in seconds given to each pod to terminate gracefully. If negative, the default value specified in the pod will be used.")
 	machineCmdDelete.Flags().BoolVar(&drainDeleteLocalData, "drain-delete-local-data", common.DrainDeleteLocalData, "Continue even if there are pods using emptyDir (local data that will be deleted when the node is drained).")
 	machineCmdDelete.Flags().BoolVar(&drainForce, "drain-force", common.DrainForce, "Continue even if there are pods not managed by a ReplicationController, ReplicaSet, Job, DaemonSet or StatefulSet.")
 
