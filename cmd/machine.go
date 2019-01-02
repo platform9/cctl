@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path"
 	"strconv"
 	"strings"
@@ -127,6 +128,11 @@ func createAdminKubeConfigSecretIfNotPresent() error {
 }
 
 func createMachine(ip string, port int, iface string, roleString string, publicKeyFiles []string) {
+	err := exec.Command("ifconfig", "-a", iface).Run()
+	if err != nil {
+		log.Fatalf("Unable to find interface: %s.", iface)
+	}
+
 	role := clustercommon.MachineRole(roleString)
 	// TODO(dlipovetsky) Move to master validation code
 	if role != clustercommon.MasterRole && role != clustercommon.NodeRole {
