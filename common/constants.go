@@ -77,5 +77,8 @@ var (
 	KubeletMaxPods      = int32(500)
 	KubeletKubeAPIQPS   = int32(20)
 	KubeletKubeAPIBurst = int32(40)
+	KubeletFeatureGates = map[string]bool{
+		"ExperimentalCriticalPodAnnotation": true,
+	}
 )
 var MasterComponents = []string{KubeAPIServer, KubeControllerManager, KubeScheduler}
