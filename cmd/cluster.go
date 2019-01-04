@@ -201,6 +201,9 @@ func setKubeletConfigDefaults(clusterConfig *spv1.ClusterConfig) {
 	if clusterConfig.Kubelet.FeatureGates == nil {
 		clusterConfig.Kubelet.FeatureGates = common.KubeletFeatureGates
 	}
+	if clusterConfig.Kubelet.EvictionHard == nil {
+		clusterConfig.Kubelet.EvictionHard = common.KubeletEvictionHard
+	}
 }
 
 func parseClusterConfigFromFile(file string) (*spv1.ClusterConfig, error) {

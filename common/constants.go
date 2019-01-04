@@ -77,6 +77,10 @@ var (
 	KubeletMaxPods      = int32(500)
 	KubeletKubeAPIQPS   = int32(20)
 	KubeletKubeAPIBurst = int32(40)
+	KubeletEvictionHard = map[string]string{
+		"memory.available": "600Mi",
+		"nodefs.available": "10%",
+	}
 	KubeletFeatureGates = map[string]bool{
 		"ExperimentalCriticalPodAnnotation": true,
 	}
