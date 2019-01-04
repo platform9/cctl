@@ -163,10 +163,6 @@ func setKubeAPIServerDefaults(clusterConfig *spv1.ClusterConfig) {
 	if clusterConfig.KubeAPIServer == nil {
 		clusterConfig.KubeAPIServer = make(map[string]string)
 	}
-	// PrivilegedPods
-	if _, ok := clusterConfig.KubeAPIServer[spconstants.KubeAPIServerAllowPrivilegedKey]; !ok {
-		clusterConfig.KubeAPIServer[spconstants.KubeAPIServerAllowPrivilegedKey] = common.KubeAPIServerAllowPrivileged
-	}
 	// ServiceNodePortRange
 	if _, ok := clusterConfig.KubeAPIServer[spconstants.KubeAPIServerServiceNodePortRangeKey]; !ok {
 		clusterConfig.KubeAPIServer[spconstants.KubeAPIServerServiceNodePortRangeKey] = common.KubeAPIServerServiceNodePortRange
