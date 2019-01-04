@@ -44,7 +44,6 @@ const (
 	DefaultAdminConfigSecretName        = "admin-kubeconfig"
 	DefaultAdminConfigSecretKey         = "data"
 	KubeAPIServerServiceNodePortRange   = "80-32767"
-	KubeAPIServerAllowPrivileged        = "true"
 	KubeControllerMgrPodEvictionTimeout = "20s"
 	DashcamBundleBaseDir                = "/var/tmp"
 	DashcamCommandPath                  = "/opt/bin/dashcam"
