@@ -67,6 +67,8 @@ Machine IP             Creation Timestamp                      Role
 {{ range $machine := .}}{{ $machine.ObjectMeta.Name }}           {{ $machine.ObjectMeta.CreationTimestamp }}           {{ $machine.Spec.Roles }}
 {{ end }}
 `
+	// LabelNodeRoleMaster specifies that a node is a master
+	LabelNodeRoleMaster = "node-role.kubernetes.io/master"
 )
 
 var (

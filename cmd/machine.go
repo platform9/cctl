@@ -328,6 +328,15 @@ func newProvisionedMachineAndMachine(name string, role clustercommon.MachineRole
 		Status: clusterv1.MachineStatus{},
 	}
 
+	if role == clustercommon.MasterRole {
+		newMachine.Spec.Taints = []corev1.Taint{
+			{
+				Key:    common.LabelNodeRoleMaster,
+				Effect: corev1.TaintEffectPreferNoSchedule,
+			},
+		}
+	}
+
 	machineProviderSpec := spv1.MachineSpec{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "sshprovider.platform9.com/v1alpha1",
