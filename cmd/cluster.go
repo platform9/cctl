@@ -198,6 +198,9 @@ func setKubeletConfigDefaults(clusterConfig *spv1.ClusterConfig) {
 	if clusterConfig.Kubelet.FailSwapOn == nil {
 		clusterConfig.Kubelet.FailSwapOn = &common.KubeletFailSwapOn
 	}
+	if clusterConfig.Kubelet.FeatureGates == nil {
+		clusterConfig.Kubelet.FeatureGates = common.KubeletFeatureGates
+	}
 }
 
 func parseClusterConfigFromFile(file string) (*spv1.ClusterConfig, error) {
