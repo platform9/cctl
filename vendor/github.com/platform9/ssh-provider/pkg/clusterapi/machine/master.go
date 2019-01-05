@@ -161,7 +161,7 @@ func deployKubernetesMaster(cluster *clusterv1.Cluster, machine *clusterv1.Machi
 	}
 	log.Println("writing nodeadm configuration file")
 	tmpNodeadmConfigPath := "/tmp/nodeadm.yaml"
-	if err := machineClient.WriteFile(tmpNodeadmConfigPath, 0644, initConfigBytes); err != nil {
+	if err := machineClient.WriteFile(tmpNodeadmConfigPath, 0600, initConfigBytes); err != nil {
 		return fmt.Errorf("error writing nodeadm init configuration to %q: %v", NodeadmConfigPath, err)
 	}
 	if err := machineClient.MoveFile(tmpNodeadmConfigPath, NodeadmConfigPath); err != nil {
