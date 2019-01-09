@@ -36,62 +36,114 @@ var (
 	routerID    int
 )
 
+type clusterOpts struct {
+	ServiceNetwork   string                 `json:"serviceNetwork,omitempty"`
+	PodNetwork       string                 `json:"podNetwork,omitempty"`
+	VIPConfiguration *spv1.VIPConfiguration `json:"vipConfiguration,omitempty"`
+	APIServerCACert  string                 `json:"apiserverCACert,omitempty"`
+	APIServerCAKey   string                 `json:"apiserverCAKey,omitempty"`
+	EtcdCACert       string                 `json:"etcdCACert,omitempty"`
+	EtcdCAKey        string                 `json:"etcdCAKey,omitempty"`
+	FrontProxyCACert string                 `json:"frontProxyCACert,omitempty"`
+	FrontProxyCAKey  string                 `json:"frontProxyCAKey,omitempty"`
+	SaPrivateKey     string                 `json:"saPrivateKey,omitempty"`
+	SaPublicKey      string                 `json:"saPublicKey,omitempty"`
+}
+
 // clusterCmd represents the cluster command
 var clusterCmdCreate = &cobra.Command{
 	Use:   "cluster",
 	Short: "Creates clusterspec in the current directory",
 	Run: func(cmd *cobra.Command, args []string) {
 
+		clusterConfig := &spv1.ClusterConfig{}
+		setClusterConfigDefaults(clusterConfig)
+
+		cctlFlags := &clusterOpts{}
+		setFlagDefaults(cctlFlags)
+
+		var err error
+		clusterConfigFile := cmd.Flag("cluster-config").Value.String()
+		if len(clusterConfigFile) != 0 {
+			err = parseClusterConfigFromFile(clusterConfigFile, clusterConfig, cctlFlags)
+			if err != nil {
+				log.Fatalf("Unable to parse cluster config %v", err)
+			}
+		}
+
+		// CLI Flags will override the cluster config.
 		vip := cmd.Flag("vip").Value.String()
+		if cmd.Flag("vip").Changed {
+			cctlFlags.VIPConfiguration.IP = vip
+		}
+		if cmd.Flag("router-id").Changed {
+			cctlFlags.VIPConfiguration.RouterID = routerID
+		}
 
 		// Verify that both routerID and vip are not defaults if one is specified
-		if (routerID == common.RouterID) != (len(vip) == 0) {
+		if (len(cctlFlags.VIPConfiguration.IP) == 0) != (cctlFlags.VIPConfiguration.RouterID == common.RouterID) {
 			log.Fatalf("Must specify both router-id and vip, or leave both empty for non-HA cluster.")
-		} else if len(vip) != 0 {
-			if routerID > 255 || routerID < 0 {
+		} else if len(cctlFlags.VIPConfiguration.IP) != 0 {
+			if cctlFlags.VIPConfiguration.RouterID > 255 || cctlFlags.VIPConfiguration.RouterID < 0 {
 				log.Fatal("Must specify a router-id between [0,255].")
 			}
 		}
 
-		servicesCIDR := cmd.Flag("service-network").Value.String()
-		podsCIDR := cmd.Flag("pod-network").Value.String()
+		if cmd.Flag("service-network").Changed {
+			cctlFlags.ServiceNetwork = cmd.Flag("service-network").Value.String()
+		}
+
+		if cmd.Flag("pod-network").Changed {
+			cctlFlags.PodNetwork = cmd.Flag("pod-network").Value.String()
+		}
+
 		saPrivateKeyFile := cmd.Flag("sa-private-key").Value.String()
 		saPublicKeyFile := cmd.Flag("sa-public-key").Value.String()
 		if (len(saPrivateKeyFile) == 0) != (len(saPublicKeyFile) == 0) {
 			log.Fatalf("Must specify both sa-private-key and sa-public-key")
 		}
+		if saPublicKeyFile != "" {
+			cctlFlags.SaPrivateKey = saPrivateKeyFile
+			cctlFlags.SaPublicKey = saPublicKeyFile
+		}
+
 		apiServerCACertFile := cmd.Flag("apiserver-ca-cert").Value.String()
 		apiServerCAKeyFile := cmd.Flag("apiserver-ca-key").Value.String()
 		if (len(apiServerCAKeyFile) == 0) != (len(apiServerCAKeyFile) == 0) {
 			log.Fatalf("Must specify both --apiserver-ca-cert and --apiserver-ca-key")
 		}
+		if apiServerCACertFile != "" {
+			cctlFlags.APIServerCACert = apiServerCACertFile
+			cctlFlags.APIServerCAKey = apiServerCAKeyFile
+		}
+
 		etcdCACertFile := cmd.Flag("etcd-ca-cert").Value.String()
 		etcdCAKeyFile := cmd.Flag("etcd-ca-key").Value.String()
 		if (len(etcdCAKeyFile) == 0) != (len(etcdCAKeyFile) == 0) {
 			log.Fatalf("Must specify both --etcd-ca-cert and --etcd-ca-key")
 		}
+		if etcdCACertFile != "" {
+			cctlFlags.EtcdCACert = etcdCACertFile
+			cctlFlags.EtcdCAKey = etcdCAKeyFile
+		}
+
 		frontProxyCACertFile := cmd.Flag("front-proxy-ca-cert").Value.String()
 		frontProxyCAKeyFile := cmd.Flag("front-proxy-ca-key").Value.String()
 		if (len(frontProxyCAKeyFile) == 0) != (len(frontProxyCAKeyFile) == 0) {
 			log.Fatalf("Must specify both --front-proxy-ca-cert and --front-proxy-ca-key")
 		}
-		clusterConfig := &spv1.ClusterConfig{}
-		var err error
-		clusterConfigFile := cmd.Flag("cluster-config").Value.String()
-		if len(clusterConfigFile) != 0 {
-			clusterConfig, err = parseClusterConfigFromFile(clusterConfigFile)
-			if err != nil {
-				log.Fatalf("Unable to parse cluster config %v", err)
-			}
+		if frontProxyCACertFile != "" {
+			cctlFlags.FrontProxyCACert = frontProxyCACertFile
+			cctlFlags.FrontProxyCAKey = frontProxyCAKeyFile
 		}
-		setClusterConfigDefaults(clusterConfig)
+
 		newAPIServerCASecret := createCASecret(common.DefaultAPIServerCASecretName, apiServerCACertFile, apiServerCAKeyFile)
 		newEtcdCASecret := createCASecret(common.DefaultEtcdCASecretName, etcdCACertFile, etcdCAKeyFile)
 		newFrontProxyCASecret := createCASecret(common.DefaultFrontProxyCASecretName, frontProxyCACertFile, frontProxyCAKeyFile)
 
 		newServiceAccountKeySecret := createServiceAccountKeySecret(saPrivateKeyFile, saPublicKeyFile)
 		newBootstrapTokenSecret := createBootstrapTokenSecret(common.DefaultBootstrapTokenSecretName)
-		newCluster, err := createCluster(common.DefaultClusterName, podsCIDR, servicesCIDR, vip, routerID, clusterConfig)
+		newCluster, err := createCluster(clusterConfig, cctlFlags)
 		if err != nil {
 			log.Fatalf("Unable to create cluster: %v", err)
 		}
@@ -150,36 +202,38 @@ func setKubeControllerMgrDefaults(clusterConfig *spv1.ClusterConfig) {
 }
 
 func setKubeletConfigDefaults(clusterConfig *spv1.ClusterConfig) {
-	if clusterConfig.Kubelet == nil {
-		clusterConfig.Kubelet = &spv1.KubeletConfiguration{}
-	}
-	if clusterConfig.Kubelet.KubeAPIQPS == nil {
-		clusterConfig.Kubelet.KubeAPIQPS = &common.KubeletKubeAPIQPS
-	}
-	if clusterConfig.Kubelet.KubeAPIBurst == 0 {
-		clusterConfig.Kubelet.KubeAPIBurst = common.KubeletKubeAPIBurst
-	}
-	if clusterConfig.Kubelet.MaxPods == 0 {
-		clusterConfig.Kubelet.MaxPods = common.KubeletMaxPods
-	}
-	if clusterConfig.Kubelet.FailSwapOn == nil {
-		clusterConfig.Kubelet.FailSwapOn = &common.KubeletFailSwapOn
-	}
+	clusterConfig.Kubelet = &spv1.KubeletConfiguration{}
+	clusterConfig.Kubelet.KubeAPIQPS = &common.KubeletKubeAPIQPS
+	clusterConfig.Kubelet.KubeAPIBurst = common.KubeletKubeAPIBurst
+	clusterConfig.Kubelet.MaxPods = common.KubeletMaxPods
+	clusterConfig.Kubelet.FailSwapOn = &common.KubeletFailSwapOn
 }
 
-func parseClusterConfigFromFile(file string) (*spv1.ClusterConfig, error) {
+func setFlagDefaults(cctlFlags *clusterOpts) {
+	cctlFlags.VIPConfiguration = &spv1.VIPConfiguration{}
+	cctlFlags.VIPConfiguration.RouterID = common.RouterID
+	cctlFlags.PodNetwork = common.DefaultPodNetworkCIDR
+	cctlFlags.ServiceNetwork = common.DefaultServiceNetworkCIDR
+}
+
+func parseClusterConfigFromFile(file string, clusterConfig *spv1.ClusterConfig, cctlFlags *clusterOpts) error {
 	data, err := ioutil.ReadFile(file)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read cluster config file %s", file)
+		return fmt.Errorf("unable to read cluster config file %s", file)
 	}
-	clusterConfig := spv1.ClusterConfig{}
 	if err = yaml.Unmarshal(data, &clusterConfig); err != nil {
-		return nil, fmt.Errorf("unable to decode cluster config: %v", err)
+		return fmt.Errorf("unable to decode cluster config: %v", err)
 	}
-	return &clusterConfig, nil
+	if err = yaml.Unmarshal(data, &cctlFlags); err != nil {
+		return fmt.Errorf("unable to decode cluster config: %v", err)
+	}
+	return nil
 }
 
-func createCluster(clusterName, podsCIDR, servicesCIDR, vip string, routerID int, clusterConfig *spv1.ClusterConfig) (*clusterv1.Cluster, error) {
+func createCluster(clusterConfig *spv1.ClusterConfig, cctlFlags *clusterOpts) (*clusterv1.Cluster, error) {
+	vip := cctlFlags.VIPConfiguration.IP
+	routerID := cctlFlags.VIPConfiguration.RouterID
+
 	apiServerPortStr, ok := clusterConfig.KubeAPIServer[spconstants.KubeAPIServerSecurePortKey]
 	var apiServerPort int64
 	if !ok {
@@ -197,7 +251,7 @@ func createCluster(clusterName, podsCIDR, servicesCIDR, vip string, routerID int
 			APIVersion: "cluster.k8s.io/v1alpha1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:              clusterName,
+			Name:              common.DefaultClusterName,
 			Namespace:         common.DefaultNamespace,
 			CreationTimestamp: metav1.Now(),
 		},
@@ -205,12 +259,12 @@ func createCluster(clusterName, podsCIDR, servicesCIDR, vip string, routerID int
 			ClusterNetwork: clusterv1.ClusterNetworkingConfig{
 				Services: clusterv1.NetworkRanges{
 					CIDRBlocks: []string{
-						servicesCIDR,
+						cctlFlags.ServiceNetwork,
 					},
 				},
 				Pods: clusterv1.NetworkRanges{
 					CIDRBlocks: []string{
-						podsCIDR,
+						cctlFlags.PodNetwork,
 					},
 				},
 				ServiceDomain: "cluster.local",
@@ -653,8 +707,8 @@ var clusterCmdUpgrade = &cobra.Command{
 
 func init() {
 	createCmd.AddCommand(clusterCmdCreate)
-	clusterCmdCreate.Flags().String("service-network", "10.1.0.0/16", "Network CIDR for services e.g. 10.1.0.0/16")
-	clusterCmdCreate.Flags().String("pod-network", "10.2.0.0/16", "Network CIDR for pods e.g. 10.2.0.0.16")
+	clusterCmdCreate.Flags().String("service-network", "", "Network CIDR for services e.g. 10.1.0.0/16")
+	clusterCmdCreate.Flags().String("pod-network", "", "Network CIDR for pods e.g. 10.2.0.0.16")
 	clusterCmdCreate.Flags().String("vip", "", "Virtual IP to be used for multi master setup")
 	clusterCmdCreate.Flags().IntVar(&routerID, "router-id", common.RouterID, "Virtual router ID for keepalived for multi master setup. Must be in the range [0, 254]. Must be unique within a single L2 network domain.")
 	clusterCmdCreate.Flags().String("apiserver-ca-cert", "", "The API Server CA certificate. Used to sign kubelet certificate requests and verify client certificates.")

@@ -49,6 +49,8 @@ const (
 	DashcamBundleBaseDir                = "/var/tmp"
 	DashcamCommandPath                  = "/opt/bin/dashcam"
 	SupportBundleFileNamePrefix         = "cctl-bundle"
+	DefaultServiceNetworkCIDR           = "10.1.0.0/16"
+	DefaultPodNetworkCIDR               = "10.2.0.0/16"
 	ClusterV1PrintTemplate              = `Cluster Information
 ------- ------------
 Cluster Name       : {{ .Cluster.ObjectMeta.Name}}
