@@ -158,13 +158,17 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 			log.Fatal("Unable to create machine. This is a single master cluster.")
 		}
 
-		apiEndpoint := []clusterv1.APIEndpoint{
-			{
-				Host: ip,
-				Port: common.DefaultAPIServerPort,
-			},
+		if len(cluster.Status.APIEndpoints) != 0 {
+			cluster.Status.APIEndpoints[0].Host = ip
+		} else {
+			apiEndpoints := []clusterv1.APIEndpoint{
+				{
+					Host: ip,
+					Port: common.DefaultAPIServerPort,
+				},
+			}
+			cluster.Status.APIEndpoints = apiEndpoints
 		}
-		cluster.Status.APIEndpoints = apiEndpoint
 		_, err = state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).UpdateStatus(cluster)
 		if err != nil {
 			log.Fatalf("Unable to update cluster state: %v", err)
