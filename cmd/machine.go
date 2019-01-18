@@ -21,6 +21,7 @@ import (
 	"github.com/platform9/cctl/common"
 	sshutil "github.com/platform9/cctl/pkg/util/ssh"
 
+	spconstants "github.com/platform9/ssh-provider/constants"
 	spv1 "github.com/platform9/ssh-provider/pkg/apis/sshprovider/v1alpha1"
 	machineActuator "github.com/platform9/ssh-provider/pkg/clusterapi/machine"
 	sputil "github.com/platform9/ssh-provider/pkg/controller"
@@ -158,17 +159,23 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 			log.Fatal("Unable to create machine. This is a single master cluster.")
 		}
 
-		if len(cluster.Status.APIEndpoints) != 0 {
-			cluster.Status.APIEndpoints[0].Host = ip
-		} else {
-			apiEndpoints := []clusterv1.APIEndpoint{
-				{
-					Host: ip,
-					Port: common.DefaultAPIServerPort,
-				},
+		apiServerPortStr, ok := cspec.ClusterConfig.KubeAPIServer[spconstants.KubeAPIServerSecurePortKey]
+		apiServerPort := common.DefaultAPIServerPort
+		if ok {
+			val, err := strconv.Atoi(apiServerPortStr)
+			if err == nil {
+				apiServerPort = val
 			}
-			cluster.Status.APIEndpoints = apiEndpoints
 		}
+
+		apiEndpoints := []clusterv1.APIEndpoint{
+			{
+				Host: ip,
+				Port: apiServerPort,
+			},
+		}
+		cluster.Status.APIEndpoints = apiEndpoints
+
 		_, err = state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).UpdateStatus(cluster)
 		if err != nil {
 			log.Fatalf("Unable to update cluster state: %v", err)
