@@ -162,9 +162,9 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 		apiServerPortStr, ok := cspec.ClusterConfig.KubeAPIServer[spconstants.KubeAPIServerSecurePortKey]
 		apiServerPort := common.DefaultAPIServerPort
 		if ok {
-			val, err := strconv.Atoi(apiServerPortStr)
-			if err == nil {
-				apiServerPort = val
+			apiServerPort, err = strconv.Atoi(apiServerPortStr)
+			if err != nil {
+				log.Fatalf("Unable to read cluster config key: %s", spconstants.KubeAPIServerSecurePortKey)
 			}
 		}
 
