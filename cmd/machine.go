@@ -164,7 +164,7 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 		if ok {
 			apiServerPort, err = strconv.Atoi(apiServerPortStr)
 			if err != nil {
-				log.Fatalf("Unable to read cluster config key: %s", spconstants.KubeAPIServerSecurePortKey)
+				log.Fatalf("Unable to parse cluster config value for kubeAPIServer with key: %s", spconstants.KubeAPIServerSecurePortKey)
 			}
 		}
 
