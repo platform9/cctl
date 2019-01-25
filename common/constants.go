@@ -82,6 +82,7 @@ var (
 	}
 	KubeletFeatureGates = map[string]bool{
 		"ExperimentalCriticalPodAnnotation": true,
+		"PodPriority":                       true,
 	}
 )
 var MasterComponents = []string{KubeAPIServer, KubeControllerManager, KubeScheduler}
