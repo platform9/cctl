@@ -42,8 +42,24 @@ var clusterCmdCreate = &cobra.Command{
 	Short: "Creates clusterspec in the current directory",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		vip := cmd.Flag("vip").Value.String()
+		if cmd.Flag("f").Changed {
+			clusterObjFile := cmd.Flag("f").Value.String()
+			clusterObj, err := parseClusterObjFromFile(clusterObjFile)
+			if err != nil {
+				log.Fatalf("Unable to parse cluster object %v", err)
+			}
 
+			if _, err := state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).Create(clusterObj); err != nil {
+				log.Fatalf("Unable to create cluster %q: %v", common.DefaultClusterName, err)
+			}
+			if err := state.PullFromAPIs(); err != nil {
+				log.Fatalf("Unable to sync on-disk state: %v", err)
+			}
+			log.Println("Cluster created successfully.")
+			return
+		}
+
+		vip := cmd.Flag("vip").Value.String()
 		// Verify that both routerID and vip are not defaults if one is specified
 		if (routerID == common.RouterID) != (len(vip) == 0) {
 			log.Fatalf("Must specify both router-id and vip, or leave both empty for non-HA cluster.")
@@ -170,13 +186,25 @@ func setKubeletConfigDefaults(clusterConfig *spv1.ClusterConfig) {
 func parseClusterConfigFromFile(file string) (*spv1.ClusterConfig, error) {
 	data, err := ioutil.ReadFile(file)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read cluster config file %s", file)
+		return nil, fmt.Errorf("unable to read cluster config file: %s", file)
 	}
 	clusterConfig := spv1.ClusterConfig{}
 	if err = yaml.Unmarshal(data, &clusterConfig); err != nil {
 		return nil, fmt.Errorf("unable to decode cluster config: %v", err)
 	}
 	return &clusterConfig, nil
+}
+
+func parseClusterObjFromFile(file string) (*clusterv1.Cluster, error) {
+	data, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read cluster object: %s", file)
+	}
+	clusterObj := clusterv1.Cluster{}
+	if err = yaml.Unmarshal(data, &clusterObj); err != nil {
+		return nil, fmt.Errorf("unable to decode cluster object: %v", err)
+	}
+	return &clusterObj, nil
 }
 
 func createCluster(clusterName, podsCIDR, servicesCIDR, vip string, routerID int, clusterConfig *spv1.ClusterConfig) (*clusterv1.Cluster, error) {
@@ -666,6 +694,7 @@ func init() {
 	clusterCmdCreate.Flags().String("sa-private-key", "", "Location of file containing private key used for signing service account tokens")
 	clusterCmdCreate.Flags().String("sa-public-key", "", "Location of file containing public key used for signing service account tokens")
 	clusterCmdCreate.Flags().String("cluster-config", "", "Location of file containing configurable parameters for the cluster")
+	clusterCmdCreate.Flags().StringP("file", "f", "", "Location of file containing a cluster object")
 	//clusterCmdCreate.Flags().String("version", "1.10.2", "Kubernetes version")
 
 	deleteCmd.AddCommand(clusterCmdDelete)
