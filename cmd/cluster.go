@@ -200,6 +200,15 @@ func setKubeletConfigDefaults(clusterConfig *spv1.ClusterConfig) {
 	if clusterConfig.Kubelet.EvictionHard == nil {
 		clusterConfig.Kubelet.EvictionHard = common.KubeletEvictionHard
 	}
+	if clusterConfig.KubeAPIServer == nil {
+		clusterConfig.KubeAPIServer = common.DefaultKubeAPIServerExtraArgs
+	}
+	if clusterConfig.KubeControllerManager == nil {
+		clusterConfig.KubeControllerManager = common.DefaultKubeControllerManagerExtraArgs
+	}
+	if clusterConfig.KubeScheduler == nil {
+		clusterConfig.KubeScheduler = common.DefaultKubeSchedulerExtraArgs
+	}
 }
 
 func parseClusterConfigFromFile(file string) (*spv1.ClusterConfig, error) {

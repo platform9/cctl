@@ -81,8 +81,10 @@ var (
 		"nodefs.available": "10%",
 	}
 	KubeletFeatureGates = map[string]bool{
-		"ExperimentalCriticalPodAnnotation": true,
-		"PodPriority":                       true,
+		"PodPriority": true,
 	}
+	DefaultKubeAPIServerExtraArgs         = map[string]string{}
+	DefaultKubeControllerManagerExtraArgs = map[string]string{}
+	DefaultKubeSchedulerExtraArgs         = map[string]string{}
 )
 var MasterComponents = []string{KubeAPIServer, KubeControllerManager, KubeScheduler}
