@@ -157,6 +157,18 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 		if err == nil {
 			log.Fatal("Unable to create machine. This is a single master cluster.")
 		}
+
+		apiEndpoint := []clusterv1.APIEndpoint{
+			{
+				Host: ip,
+				Port: common.DefaultAPIServerPort,
+			},
+		}
+		cluster.Status.APIEndpoints = apiEndpoint
+		_, err = state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).UpdateStatus(cluster)
+		if err != nil {
+			log.Fatalf("Unable to update cluster state: %v", err)
+		}
 	}
 
 	sshCredentialSecret, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Get(common.DefaultSSHCredentialSecretName, metav1.GetOptions{})
