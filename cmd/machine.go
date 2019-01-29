@@ -969,7 +969,6 @@ func init() {
 	machineCmdCreate.Flags().Int("port", common.DefaultSSHPort, "SSH port")
 	machineCmdCreate.Flags().String("role", "", "Role of the machine. Can be master/node")
 	machineCmdCreate.Flags().StringSlice("public-keys", []string{}, "The machine's SSH public keys. Provide a comma-separated list, or define multiple flags.")
-	machineCmdCreate.Flags().String("ssh-secret-name", "sshSecret", "Name of the sshSecret to use")
 	machineCmdCreate.Flags().String("iface", "eth0", "Interface that keepalived will bind to in case of master")
 
 	deleteCmd.AddCommand(machineCmdDelete)
