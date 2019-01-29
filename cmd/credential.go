@@ -17,7 +17,7 @@ var credentialCmdCreate = &cobra.Command{
 	Use:   "credential",
 	Short: "Create new SSH credential",
 	Run: func(cmd *cobra.Command, args []string) {
-		privateKeyFilename := cmd.Flag("privateKey").Value.String()
+		privateKeyFilename := cmd.Flag("private-key").Value.String()
 		privateKeyBytes, err := ioutil.ReadFile(privateKeyFilename)
 		if err != nil {
 			log.Fatalf("Failed to read private key from %q: %v", privateKeyFilename, err)
@@ -43,7 +43,7 @@ var credentialCmdCreate = &cobra.Command{
 			}
 			log.Fatalf("Unable to create ssh credential secret: %v", err)
 		}
-		log.Printf("Created ssh credential: user %q and private key %q", cmd.Flag("user").Value.String(), cmd.Flag("privateKey").Value.String())
+		log.Printf("Created ssh credential: user %q and private key %q", cmd.Flag("user").Value.String(), cmd.Flag("private-key").Value.String())
 		if err := state.PullFromAPIs(); err != nil {
 			log.Fatalf("Unable to sync on-disk state: %v", err)
 		}
@@ -70,8 +70,8 @@ var credentialCmdDelete = &cobra.Command{
 func init() {
 	createCmd.AddCommand(credentialCmdCreate)
 	credentialCmdCreate.Flags().String("user", "root", "SSH username")
-	credentialCmdCreate.Flags().String("privateKey", "", "SSH privateKey file location")
-	credentialCmdCreate.MarkFlagRequired("privateKey")
+	credentialCmdCreate.Flags().String("private-key", "", "SSH privateKey file location")
+	credentialCmdCreate.MarkFlagRequired("private-key")
 
 	deleteCmd.AddCommand(credentialCmdDelete)
 }
