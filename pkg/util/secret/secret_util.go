@@ -106,7 +106,7 @@ func generateKeyPair() ([]byte, []byte, error) {
 }
 
 func createSecret(name string) *corev1.Secret {
-	btSecret := corev1.Secret{
+	secret := corev1.Secret{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Secret",
 			APIVersion: "v1",
@@ -118,5 +118,5 @@ func createSecret(name string) *corev1.Secret {
 		},
 		Data: make(map[string][]byte),
 	}
-	return &btSecret
+	return &secret
 }
