@@ -44,7 +44,7 @@ var clusterCmdCreate = &cobra.Command{
 
 		if cmd.Flag("f").Changed {
 			clusterObjFile := cmd.Flag("f").Value.String()
-			clusterObj, err := parseClusterObjFromFile(clusterObjFile)
+			clusterObj, err := clusterFromFile(clusterObjFile)
 			if err != nil {
 				log.Fatalf("Unable to parse cluster object %v", err)
 			}
@@ -195,7 +195,7 @@ func parseClusterConfigFromFile(file string) (*spv1.ClusterConfig, error) {
 	return &clusterConfig, nil
 }
 
-func parseClusterObjFromFile(file string) (*clusterv1.Cluster, error) {
+func clusterFromFile(file string) (*clusterv1.Cluster, error) {
 	data, err := ioutil.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read cluster object: %s", file)
