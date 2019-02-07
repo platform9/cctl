@@ -17,6 +17,9 @@ var secretCmdCreate = &cobra.Command{
 		if err != nil {
 			log.Fatalf("Unable to create secrets: %v", err)
 		}
+		if err = state.PullFromAPIs(); err != nil {
+			log.Fatalf("unable to sync on-disk state: %v", err)
+		}
 		log.Println("Secrets created successfully.")
 	},
 }
@@ -59,10 +62,6 @@ func createSecretDefaults() error {
 	if _, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Create(newBootstrapTokenSecret); err != nil {
 		return fmt.Errorf("unable to create bootstrap token secret: %v", err)
 	}
-	if err := state.PullFromAPIs(); err != nil {
-		return fmt.Errorf("unable to sync on-disk state: %v", err)
-	}
-
 	return nil
 }
 
