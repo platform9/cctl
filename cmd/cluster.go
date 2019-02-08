@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -34,6 +35,7 @@ import (
 var (
 	forceDelete bool
 	routerID    int
+	vip         string
 )
 
 // clusterCmd represents the cluster command
@@ -59,13 +61,21 @@ var clusterCmdCreate = &cobra.Command{
 			return
 		}
 
-		vip := cmd.Flag("vip").Value.String()
-		// Verify that both routerID and vip are not defaults if one is specified
-		if (routerID == common.RouterID) != (len(vip) == 0) {
-			log.Fatalf("Must specify both router-id and vip, or leave both empty for non-HA cluster.")
-		} else if len(vip) != 0 {
+		// If either vip or routerID is defined, then both must be
+		if cmd.Flag("vip").Changed != cmd.Flag("router-id").Changed {
+			log.Fatalf("Must use both --router-id and --vip, or use neither for a non-HA cluster.")
+		}
+		var vipConfig *spv1.VIPConfiguration
+		if cmd.Flag("vip").Changed && cmd.Flag("router-id").Changed {
 			if routerID > 255 || routerID < 0 {
-				log.Fatal("Must specify a router-id between [0,255].")
+				log.Fatalf("The --router-id %d must be between [0,255].", routerID)
+			}
+			if parsedIP := net.ParseIP(vip); parsedIP == nil {
+				log.Fatalf("The --vip %s must be a valid IP.", vip)
+			}
+			vipConfig = &spv1.VIPConfiguration{
+				RouterID: routerID,
+				IP:       vip,
 			}
 		}
 
@@ -124,7 +134,7 @@ var clusterCmdCreate = &cobra.Command{
 			log.Fatalf("Unable to generate bootstrap token secret: %v", err)
 		}
 
-		newCluster, err := createCluster(common.DefaultClusterName, podsCIDR, servicesCIDR, vip, routerID, clusterConfig)
+		newCluster, err := createCluster(common.DefaultClusterName, podsCIDR, servicesCIDR, vipConfig, clusterConfig)
 		if err != nil {
 			log.Fatalf("Unable to create cluster: %v", err)
 		}
@@ -235,7 +245,7 @@ func clusterFromFile(file string) (*clusterv1.Cluster, error) {
 	return &clusterObj, nil
 }
 
-func createCluster(clusterName, podsCIDR, servicesCIDR, vip string, routerID int, clusterConfig *spv1.ClusterConfig) (*clusterv1.Cluster, error) {
+func createCluster(clusterName, podsCIDR, servicesCIDR string, vipConfig *spv1.VIPConfiguration, clusterConfig *spv1.ClusterConfig) (*clusterv1.Cluster, error) {
 	apiServerPortStr, ok := clusterConfig.KubeAPIServer[spconstants.KubeAPIServerSecurePortKey]
 	var apiServerPort int64
 	if !ok {
@@ -302,11 +312,8 @@ func createCluster(clusterName, podsCIDR, servicesCIDR, vip string, routerID int
 		BootstrapTokenSecret: &corev1.LocalObjectReference{
 			Name: common.DefaultBootstrapTokenSecretName,
 		},
-		VIPConfiguration: &spv1.VIPConfiguration{
-			IP:       vip,
-			RouterID: routerID,
-		},
-		ClusterConfig: clusterConfig,
+		ClusterConfig:    clusterConfig,
+		VIPConfiguration: vipConfig,
 	}
 
 	spClusterStatus := spv1.ClusterStatus{
@@ -612,8 +619,8 @@ func init() {
 	createCmd.AddCommand(clusterCmdCreate)
 	clusterCmdCreate.Flags().String("service-network", "10.1.0.0/16", "Network CIDR for services e.g. 10.1.0.0/16")
 	clusterCmdCreate.Flags().String("pod-network", "10.2.0.0/16", "Network CIDR for pods e.g. 10.2.0.0.16")
-	clusterCmdCreate.Flags().String("vip", "", "Virtual IP to be used for multi master setup")
-	clusterCmdCreate.Flags().IntVar(&routerID, "router-id", common.RouterID, "Virtual router ID for keepalived for multi master setup. Must be in the range [0, 254]. Must be unique within a single L2 network domain.")
+	clusterCmdCreate.Flags().StringVar(&vip, "vip", "", "Virtual IP to be used for multi master setup")
+	clusterCmdCreate.Flags().IntVar(&routerID, "router-id", -1, "Virtual router ID for keepalived for multi master setup. Must be in the range [0, 254]. Must be unique within a single L2 network domain.")
 	clusterCmdCreate.Flags().String("apiserver-ca-cert", "", "The API Server CA certificate. Used to sign kubelet certificate requests and verify client certificates.")
 	clusterCmdCreate.Flags().String("apiserver-ca-key", "", "The API Server CA certificate key.")
 	clusterCmdCreate.Flags().String("etcd-ca-cert", "", "The etcd CA certificate. Used to sign and verify client and peer certificates.")
