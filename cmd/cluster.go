@@ -16,10 +16,10 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	certutil "k8s.io/client-go/util/cert"
 
 	"github.com/platform9/cctl/common"
 	"github.com/platform9/cctl/pkg/util/clusterapi"
+	"github.com/platform9/cctl/pkg/util/secret"
 	"github.com/platform9/cctl/semverutil"
 
 	spconstants "github.com/platform9/ssh-provider/constants"
@@ -43,7 +43,6 @@ var clusterCmdCreate = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 
 		vip := cmd.Flag("vip").Value.String()
-
 		// Verify that both routerID and vip are not defaults if one is specified
 		if (routerID == common.RouterID) != (len(vip) == 0) {
 			log.Fatalf("Must specify both router-id and vip, or leave both empty for non-HA cluster.")
@@ -85,12 +84,29 @@ var clusterCmdCreate = &cobra.Command{
 			}
 		}
 		setClusterConfigDefaults(clusterConfig)
-		newAPIServerCASecret := createCASecret(common.DefaultAPIServerCASecretName, apiServerCACertFile, apiServerCAKeyFile)
-		newEtcdCASecret := createCASecret(common.DefaultEtcdCASecretName, etcdCACertFile, etcdCAKeyFile)
-		newFrontProxyCASecret := createCASecret(common.DefaultFrontProxyCASecretName, frontProxyCACertFile, frontProxyCAKeyFile)
 
-		newServiceAccountKeySecret := createServiceAccountKeySecret(saPrivateKeyFile, saPublicKeyFile)
-		newBootstrapTokenSecret := createBootstrapTokenSecret(common.DefaultBootstrapTokenSecretName)
+		newAPIServerCASecret, err := secret.CreateCASecret(common.DefaultAPIServerCASecretName, apiServerCACertFile, apiServerCAKeyFile)
+		if err != nil {
+			log.Fatalf("Unable to generate API Server CA cert pair: %v", err)
+		}
+		newEtcdCASecret, err := secret.CreateCASecret(common.DefaultEtcdCASecretName, etcdCACertFile, etcdCAKeyFile)
+		if err != nil {
+			log.Fatalf("Unable to generate etcd CA cert pair: %v", err)
+		}
+		newFrontProxyCASecret, err := secret.CreateCASecret(common.DefaultFrontProxyCASecretName, frontProxyCACertFile, frontProxyCAKeyFile)
+		if err != nil {
+			log.Fatalf("Unable to generate front proxy CA cert pair: %v", err)
+		}
+
+		newServiceAccountKeySecret, err := secret.CreateSAKeySecret(common.DefaultServiceAccountKeySecretName, saPrivateKeyFile, saPublicKeyFile)
+		if err != nil {
+			log.Fatalf("Unable to generate service account key pair: %v", err)
+		}
+		newBootstrapTokenSecret, err := secret.CreateBootstrapTokenSecret(common.DefaultBootstrapTokenSecretName)
+		if err != nil {
+			log.Fatalf("Unable to generate bootstrap token secret: %v", err)
+		}
+
 		newCluster, err := createCluster(common.DefaultClusterName, podsCIDR, servicesCIDR, vip, routerID, clusterConfig)
 		if err != nil {
 			log.Fatalf("Unable to create cluster: %v", err)
@@ -265,105 +281,6 @@ func createCluster(clusterName, podsCIDR, servicesCIDR, vip string, routerID int
 	sputil.PutClusterStatus(spClusterStatus, &newCluster)
 
 	return &newCluster, nil
-}
-
-func createServiceAccountKeySecret(saPrivateKeyFile, saPublicKeyFile string) *corev1.Secret {
-	sakSecret := corev1.Secret{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Secret",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              "serviceaccount-key",
-			Namespace:         common.DefaultNamespace,
-			CreationTimestamp: metav1.Now(),
-		},
-		Data: make(map[string][]byte),
-	}
-
-	var privateKeyBytes []byte
-	var publicKeyBytes []byte
-	if len(saPrivateKeyFile) != 0 && len(saPublicKeyFile) != 0 {
-		var err error
-		privateKeyBytes, err = ioutil.ReadFile(saPrivateKeyFile)
-		if err != nil {
-			log.Fatalf("Unable to read service account private key %q: %v", saPrivateKeyFile, err)
-		}
-		publicKeyBytes, err = ioutil.ReadFile(saPublicKeyFile)
-		if err != nil {
-			log.Fatalf("Unable to read service account public key %q: %v", saPublicKeyFile, err)
-		}
-	} else {
-		key, err := certutil.NewPrivateKey()
-		if err != nil {
-			log.Fatalf("Unable to create a service account private key: %v", err)
-		}
-		privateKeyBytes = certutil.EncodePrivateKeyPEM(key)
-		publicKeyBytes, err = certutil.EncodePublicKeyPEM(&key.PublicKey)
-		if err != nil {
-			log.Fatalf("Unable to encode service account public key to PEM format: %v", err)
-		}
-	}
-
-	sakSecret.Data["privatekey"] = privateKeyBytes
-	sakSecret.Data["publickey"] = publicKeyBytes
-
-	return &sakSecret
-}
-
-func createCASecret(secretName, certFilename, keyFilename string) *corev1.Secret {
-	caSecret := corev1.Secret{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Secret",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              secretName,
-			Namespace:         common.DefaultNamespace,
-			CreationTimestamp: metav1.Now(),
-		},
-		Data: make(map[string][]byte),
-	}
-
-	var certBytes []byte
-	var keyBytes []byte
-	if len(certFilename) != 0 && len(keyFilename) != 0 {
-		var err error
-		certBytes, err = ioutil.ReadFile(certFilename)
-		if err != nil {
-			log.Fatalf("Unable to read CA cert %q: %v", certFilename, err)
-		}
-		keyBytes, err = ioutil.ReadFile(keyFilename)
-		if err != nil {
-			log.Fatalf("Unable to read CA key %q: %v", keyFilename, err)
-		}
-	} else {
-		cert, key, err := common.NewCertificateAuthority()
-		if err != nil {
-			log.Fatalf("Unable to create CA: %v", err)
-		}
-		certBytes = certutil.EncodeCertPEM(cert)
-		keyBytes = certutil.EncodePrivateKeyPEM(key)
-	}
-	caSecret.Data["tls.crt"] = certBytes
-	caSecret.Data["tls.key"] = keyBytes
-	return &caSecret
-}
-
-func createBootstrapTokenSecret(name string) *corev1.Secret {
-	btSecret := corev1.Secret{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Secret",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              name,
-			Namespace:         common.DefaultNamespace,
-			CreationTimestamp: metav1.Now(),
-		},
-		Data: make(map[string][]byte),
-	}
-	return &btSecret
 }
 
 var clusterCmdDelete = &cobra.Command{
