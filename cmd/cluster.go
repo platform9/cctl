@@ -42,7 +42,7 @@ var clusterCmdCreate = &cobra.Command{
 	Short: "Creates clusterspec in the current directory",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		if cmd.Flag("f").Changed {
+		if cmd.Flag("file").Changed {
 			clusterObjFile := cmd.Flag("f").Value.String()
 			clusterObj, err := clusterFromFile(clusterObjFile)
 			if err != nil {
