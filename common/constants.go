@@ -56,8 +56,12 @@ Networking
 
 	Pod CIDR     : {{ .Cluster.Spec.ClusterNetwork.Pods.CIDRBlocks }}
 	Service CIDR : {{ .Cluster.Spec.ClusterNetwork.Services.CIDRBlocks }}
+	{{  if .ClusterProviderSpec.VIPConfiguration  }}
 	VIP          : {{ .ClusterProviderSpec.VIPConfiguration.IP  }}
 	RouterID     : {{ .ClusterProviderSpec.VIPConfiguration.RouterID }}
+	{{- else  }}
+	VIP          : None configured.
+	{{  end  }}
 `
 	MachineV1PrintTemplate = `Machine Information
 ------- -----------
