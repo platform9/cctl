@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"strconv"
 	"strings"
 	"text/template"
 
@@ -246,17 +245,6 @@ func clusterFromFile(file string) (*clusterv1.Cluster, error) {
 }
 
 func createCluster(clusterName, podsCIDR, servicesCIDR string, vipConfig *spv1.VIPConfiguration, clusterConfig *spv1.ClusterConfig) (*clusterv1.Cluster, error) {
-	apiServerPortStr, ok := clusterConfig.KubeAPIServer[spconstants.KubeAPIServerSecurePortKey]
-	var apiServerPort int64
-	if !ok {
-		apiServerPort = common.DefaultAPIServerPort
-	} else {
-		var err error
-		apiServerPort, err = strconv.ParseInt(apiServerPortStr, 10, 32)
-		if err != nil {
-			return nil, err
-		}
-	}
 	newCluster := clusterv1.Cluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Cluster",
@@ -280,14 +268,6 @@ func createCluster(clusterName, podsCIDR, servicesCIDR string, vipConfig *spv1.V
 					},
 				},
 				ServiceDomain: "cluster.local",
-			},
-		},
-		Status: clusterv1.ClusterStatus{
-			APIEndpoints: []clusterv1.APIEndpoint{
-				{
-					Host: vip,
-					Port: int(apiServerPort),
-				},
 			},
 		},
 	}
