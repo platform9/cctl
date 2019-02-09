@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path"
 	"strconv"
@@ -21,7 +22,6 @@ import (
 	"github.com/platform9/cctl/common"
 	sshutil "github.com/platform9/cctl/pkg/util/ssh"
 
-	spconstants "github.com/platform9/ssh-provider/constants"
 	spv1 "github.com/platform9/ssh-provider/pkg/apis/sshprovider/v1alpha1"
 	machineActuator "github.com/platform9/ssh-provider/pkg/clusterapi/machine"
 	sputil "github.com/platform9/ssh-provider/pkg/controller"
@@ -150,36 +150,21 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 		log.Fatalf("Unable to get cluster: %v", err)
 	}
 
-	cspec, err := sputil.GetClusterSpec(*cluster)
-	vipconf := cspec.VIPConfiguration
-	// If no vip exists, check if other masters exist before creating a new one.
-	if role == clustercommon.MasterRole && vipconf.IP == "" {
-		_, _, err = masterMachineAndProvisionedMachine()
-		if err == nil {
-			log.Fatal("Unable to create machine. This is a single master cluster.")
-		}
+	if role == clustercommon.MasterRole {
+		cspec, err := sputil.GetClusterSpec(*cluster)
 
-		apiServerPortStr, ok := cspec.ClusterConfig.KubeAPIServer[spconstants.KubeAPIServerSecurePortKey]
-		apiServerPort := common.DefaultAPIServerPort
-		if ok {
-			apiServerPort, err = strconv.Atoi(apiServerPortStr)
-			if err != nil {
-				log.Fatalf("Unable to parse cluster config value for kubeAPIServer with key: %s", spconstants.KubeAPIServerSecurePortKey)
+		// If no vip exists, check if other masters exist before creating a new one.
+		if cspec.VIPConfiguration == nil {
+			_, _, err = masterMachineAndProvisionedMachine()
+			if err == nil {
+				log.Fatal("Creating a master is not allowed: this cluster already has one master and has no VIP configured.")
 			}
 		}
+	}
 
-		apiEndpoints := []clusterv1.APIEndpoint{
-			{
-				Host: ip,
-				Port: apiServerPort,
-			},
-		}
-		cluster.Status.APIEndpoints = apiEndpoints
-
-		_, err = state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).UpdateStatus(cluster)
-		if err != nil {
-			log.Fatalf("Unable to update cluster state: %v", err)
-		}
+	_, err = state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).UpdateStatus(cluster)
+	if err != nil {
+		log.Fatalf("Unable to update cluster state: %v", err)
 	}
 
 	sshCredentialSecret, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Get(common.DefaultSSHCredentialSecretName, metav1.GetOptions{})
@@ -247,6 +232,7 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 	}
 
 	log.Println("Updating cluster status")
+	// Update cluster etcd members
 	machineStatus, err := sputil.GetMachineStatus(*newMachine)
 	if err != nil {
 		log.Fatalf("Unable to get machine %q status: %v", newMachine.Name, err)
@@ -254,6 +240,23 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 	if machineStatus.EtcdMember != nil {
 		if err := insertClusterEtcdMember(*machineStatus.EtcdMember, cluster); err != nil {
 			log.Fatalf("Unable to add etcd member to cluster status: %v", err)
+		}
+	}
+	// Update cluster API endpoints
+	machineAPIEndpoint, err := apiEndpointFromMachine(newMachine, newProvisionedMachine)
+	if err != nil {
+		log.Fatalf("Unable to get machine %q API endpoint: %v", newMachine.Name, err)
+	}
+	if len(cluster.Status.APIEndpoints) > 0 {
+		// If there is a VIP, each master machine should report the same API endpoint.
+		// If there is no VIP, there should only be one master.
+		if cluster.Status.APIEndpoints[0] != *machineAPIEndpoint {
+			log.Fatalf("Internal error: the cluster should have exactly one API endpoint. Please report this to Platform9.")
+		}
+	} else {
+		cluster.Status.APIEndpoints = []clusterv1.APIEndpoint{*machineAPIEndpoint}
+		if _, err := state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).UpdateStatus(cluster); err != nil {
+			log.Fatalf("Unable to update cluster status: %v", err)
 		}
 	}
 
@@ -530,6 +533,56 @@ func masterMachineAndProvisionedMachine() (*clusterv1.Machine, *spv1.Provisioned
 		return nil, nil, fmt.Errorf("unable to get provisioned machine: %v", err)
 	}
 	return masterMachine, masterProvisionedMachine.DeepCopy(), nil
+}
+
+// apiEndpointFromMachine returns a cluster API endpoint by invoking `kubeadm
+// config view` on the machine.
+func apiEndpointFromMachine(machine *clusterv1.Machine, provisionedMachine *spv1.ProvisionedMachine) (*clusterv1.APIEndpoint, error) {
+	machineClient, err := sshMachineClientFromSSHConfig(provisionedMachine.Spec.SSHConfig)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create machine client for machine %q: %v", machine.Name, err)
+	}
+	stdOut, stdErr, err := machineClient.RunCommand("/opt/bin/kubeadm config view")
+	if err != nil {
+		log.Println(stdOut)
+		log.Println(stdErr)
+		return nil, fmt.Errorf("unable to run `kubeadm config view` on %q: %v", machine.Name, err)
+	}
+	masterConfig := struct {
+		API struct {
+			AdvertiseAddress     string
+			BindPort             int
+			ControlPlaneEndpoint string
+		}
+	}{}
+	err = yaml.Unmarshal(stdOut, &masterConfig)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read kubeconfig from machine %q:%v", machine.Name, err)
+	}
+
+	// - If API.ControlPlaneEndpoint is defined, use it.
+	// - If API.ControlPlaneEndpoint is defined without a port number, use the host in ControlPlaneEndpoint + API.BindPort.
+	// - If API.ControlPlaneEndpoint is not defined, use the API.AdvertiseAddress + API.BindPort.
+	apiEndpoint := clusterv1.APIEndpoint{}
+	if masterConfig.API.ControlPlaneEndpoint != "" {
+		url, err := url.Parse(masterConfig.API.ControlPlaneEndpoint)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse api.ControlPlaneEndpoint in kubeadm config: %s", err)
+		}
+		apiEndpoint.Host = url.Hostname()
+		if url.Port() != "" {
+			apiEndpoint.Port, err = strconv.Atoi(url.Port())
+			if err != nil {
+				return nil, fmt.Errorf("unable to parse port in api.ControlPlaneEndpoint: %s", err)
+			}
+		} else {
+			apiEndpoint.Port = masterConfig.API.BindPort
+		}
+	} else {
+		apiEndpoint.Host = masterConfig.API.AdvertiseAddress
+		apiEndpoint.Port = masterConfig.API.BindPort
+	}
+	return &apiEndpoint, nil
 }
 
 func tokenAndCAHashFromKubeadmJoinCommand(cmdStdout string) (string, string, error) {
