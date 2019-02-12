@@ -3,13 +3,15 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"os"
 	"path"
 	"strconv"
 	"strings"
 	"text/template"
 	"time"
+
+	"github.com/platform9/cctl/pkg/util/clusterapi"
+	kubeadmutil "github.com/platform9/cctl/pkg/util/kubeadm"
 
 	log "github.com/platform9/cctl/pkg/logrus"
 
@@ -150,21 +152,18 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 		log.Fatalf("Unable to get cluster: %v", err)
 	}
 
-	if role == clustercommon.MasterRole {
-		cspec, err := sputil.GetClusterSpec(*cluster)
-
-		// If no vip exists, check if other masters exist before creating a new one.
-		if cspec.VIPConfiguration == nil {
+	cspec, err := sputil.GetClusterSpec(*cluster)
+	if err != nil {
+		log.Fatalf("Unable to decode cluster spec: %v", err)
+	}
+	// If no vip exists, check if other masters exist before creating a new one.
+	if cspec.VIPConfiguration == nil {
+		if role == clustercommon.MasterRole {
 			_, _, err = masterMachineAndProvisionedMachine()
 			if err == nil {
 				log.Fatal("Creating a master is not allowed: this cluster already has one master and has no VIP configured.")
 			}
 		}
-	}
-
-	_, err = state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).UpdateStatus(cluster)
-	if err != nil {
-		log.Fatalf("Unable to update cluster state: %v", err)
 	}
 
 	sshCredentialSecret, err := state.KubeClient.CoreV1().Secrets(common.DefaultNamespace).Get(common.DefaultSSHCredentialSecretName, metav1.GetOptions{})
@@ -231,32 +230,48 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 		}
 	}
 
-	log.Println("Updating cluster status")
-	// Update cluster etcd members
-	machineStatus, err := sputil.GetMachineStatus(*newMachine)
-	if err != nil {
-		log.Fatalf("Unable to get machine %q status: %v", newMachine.Name, err)
-	}
-	if machineStatus.EtcdMember != nil {
-		if err := insertClusterEtcdMember(*machineStatus.EtcdMember, cluster); err != nil {
-			log.Fatalf("Unable to add etcd member to cluster status: %v", err)
+	if clusterutil.RoleContains(clustercommon.MasterRole, newMachine.Spec.Roles) {
+		log.Println("Updating cluster status")
+		// Update cluster etcd members
+		machineStatus, err := sputil.GetMachineStatus(*newMachine)
+		if err != nil {
+			log.Fatalf("Unable to get machine %q status: %v", newMachine.Name, err)
 		}
-	}
-	// Update cluster API endpoints
-	machineAPIEndpoint, err := apiEndpointFromMachine(newMachine, newProvisionedMachine)
-	if err != nil {
-		log.Fatalf("Unable to get machine %q API endpoint: %v", newMachine.Name, err)
-	}
-	if len(cluster.Status.APIEndpoints) > 0 {
-		// If there is a VIP, each master machine should report the same API endpoint.
-		// If there is no VIP, there should only be one master.
-		if cluster.Status.APIEndpoints[0] != *machineAPIEndpoint {
-			log.Fatalf("Internal error: the cluster should have exactly one API endpoint. Please report this to Platform9.")
+		if machineStatus.EtcdMember != nil {
+			if err := insertClusterEtcdMember(*machineStatus.EtcdMember, cluster); err != nil {
+				log.Fatalf("Unable to add etcd member to cluster status: %v", err)
+			}
 		}
-	} else {
-		cluster.Status.APIEndpoints = []clusterv1.APIEndpoint{*machineAPIEndpoint}
-		if _, err := state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).UpdateStatus(cluster); err != nil {
-			log.Fatalf("Unable to update cluster status: %v", err)
+		// Update cluster API endpoints
+		machineAPIEndpoint, err := apiEndpointFromMachine(newMachine, newProvisionedMachine)
+		if err != nil {
+			log.Fatalf("Unable to get machine %q API endpoint: %v", newMachine.Name, err)
+		}
+		cspec, err = sputil.GetClusterSpec(*cluster)
+		if err != nil {
+			log.Fatalf("Unable to decode cluster spec: %v", err)
+		}
+
+		if cspec.VIPConfiguration != nil {
+			if len(cluster.Status.APIEndpoints) == 0 {
+				cluster.Status.APIEndpoints = append(cluster.Status.APIEndpoints, *machineAPIEndpoint)
+			} else {
+				// If there is a VIP, each master machine should report the same endpoint.
+				if cluster.Status.APIEndpoints[0] != *machineAPIEndpoint {
+					log.Fatalf("Internal error: the cluster endpoint (%s:%d) reported by machine %s should be (%s:%d). Please report this to Platform9.", machineAPIEndpoint.Host, machineAPIEndpoint.Port, newMachine.Name, cluster.Status.APIEndpoints[0].Host, cluster.Status.APIEndpoints[0].Port)
+				}
+			}
+		} else {
+			if len(cluster.Status.APIEndpoints) == 0 {
+				cluster.Status.APIEndpoints = append(cluster.Status.APIEndpoints, *machineAPIEndpoint)
+				// If there is no VIP, there should only be one master.
+			} else {
+				log.Fatalf("Internal error: this cluster has no VIP configured and already has one API endpoint. Please report this to Platform9.")
+			}
+		}
+		_, err = state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).UpdateStatus(cluster)
+		if err != nil {
+			log.Fatalf("Unable to update cluster state: %v", err)
 		}
 	}
 
@@ -437,6 +452,25 @@ func deleteMachine(ip string, force bool, skipDrainDelete bool) {
 		log.Fatalf("unable to delete provisioned machine %q: %v", targetProvisionedMachine.Name, err)
 	}
 
+	if clusterutil.RoleContains(clustercommon.MasterRole, targetMachine.Spec.Roles) {
+		// Update cluster API endpoints
+		machines, err := state.ClusterClient.ClusterV1alpha1().Machines(common.DefaultNamespace).List(metav1.ListOptions{})
+		if err != nil {
+			log.Fatalf("unable to list machines: %v", err)
+		}
+		masters := clusterapi.MachinesWithRole(machines.Items, clustercommon.MasterRole)
+		// TODO(daniel) Store the API endpoint the machine reports in Machine.ProviderStatus,
+		// and remove that endpoint from the cluster API endpoints. For now, assume there is
+		// only one endpoint; if all master machines were deleted, delete the endpoint.
+		if len(masters) == 0 {
+			cluster.Status.APIEndpoints = []clusterv1.APIEndpoint{}
+		}
+		_, err = state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).UpdateStatus(cluster)
+		if err != nil {
+			log.Fatalf("Unable to update cluster state: %v", err)
+		}
+	}
+
 	if err := state.PullFromAPIs(); err != nil {
 		log.Fatalf("Unable to sync on-disk state: %v", err)
 	}
@@ -557,41 +591,16 @@ func apiEndpointFromMachine(machine *clusterv1.Machine, provisionedMachine *spv1
 		log.Println(stdErr)
 		return nil, fmt.Errorf("unable to run `kubeadm config view` on %q: %v", machine.Name, err)
 	}
-	masterConfig := struct {
-		API struct {
-			AdvertiseAddress     string
-			BindPort             int
-			ControlPlaneEndpoint string
-		}
-	}{}
+	masterConfig := kubeadmutil.MasterConfiguration{}
 	err = yaml.Unmarshal(stdOut, &masterConfig)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read kubeconfig from machine %q:%v", machine.Name, err)
 	}
-
-	// - If API.ControlPlaneEndpoint is defined, use it.
-	// - If API.ControlPlaneEndpoint is defined without a port number, use the host in ControlPlaneEndpoint + API.BindPort.
-	// - If API.ControlPlaneEndpoint is not defined, use the API.AdvertiseAddress + API.BindPort.
-	apiEndpoint := clusterv1.APIEndpoint{}
-	if masterConfig.API.ControlPlaneEndpoint != "" {
-		url, err := url.Parse(masterConfig.API.ControlPlaneEndpoint)
-		if err != nil {
-			return nil, fmt.Errorf("unable to parse api.ControlPlaneEndpoint in kubeadm config: %s", err)
-		}
-		apiEndpoint.Host = url.Hostname()
-		if url.Port() != "" {
-			apiEndpoint.Port, err = strconv.Atoi(url.Port())
-			if err != nil {
-				return nil, fmt.Errorf("unable to parse port in api.ControlPlaneEndpoint: %s", err)
-			}
-		} else {
-			apiEndpoint.Port = masterConfig.API.BindPort
-		}
-	} else {
-		apiEndpoint.Host = masterConfig.API.AdvertiseAddress
-		apiEndpoint.Port = masterConfig.API.BindPort
+	apiEndpoint, err := kubeadmutil.APIEndpointFromMasterConfiguration(&masterConfig)
+	if err != nil {
+		return nil, fmt.Errorf("unable to derive API endpoint from `kubeadm config view` on %q: %v", machine.Name, err)
 	}
-	return &apiEndpoint, nil
+	return apiEndpoint, nil
 }
 
 func tokenAndCAHashFromKubeadmJoinCommand(cmdStdout string) (string, string, error) {
