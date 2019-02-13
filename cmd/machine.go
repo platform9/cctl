@@ -258,7 +258,7 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 			} else {
 				// If there is a VIP, each master machine should report the same endpoint.
 				if cluster.Status.APIEndpoints[0] != *machineAPIEndpoint {
-					log.Fatalf("Internal error: the cluster endpoint (%s:%d) reported by machine %s should be (%s:%d). Please report this to Platform9.", machineAPIEndpoint.Host, machineAPIEndpoint.Port, newMachine.Name, cluster.Status.APIEndpoints[0].Host, cluster.Status.APIEndpoints[0].Port)
+					log.Fatalf("Internal error: the cluster endpoint (%s:%d) reported by machine %s should be (%s:%d).", machineAPIEndpoint.Host, machineAPIEndpoint.Port, newMachine.Name, cluster.Status.APIEndpoints[0].Host, cluster.Status.APIEndpoints[0].Port)
 				}
 			}
 		} else {
@@ -266,7 +266,7 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 				cluster.Status.APIEndpoints = append(cluster.Status.APIEndpoints, *machineAPIEndpoint)
 				// If there is no VIP, there should only be one master.
 			} else {
-				log.Fatalf("Internal error: this cluster has no VIP configured and already has one API endpoint. Please report this to Platform9.")
+				log.Fatalf("Internal error: this cluster has no VIP configured and already has one API endpoint.")
 			}
 		}
 		_, err = state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).UpdateStatus(cluster)
