@@ -10,6 +10,8 @@ import (
 	"text/template"
 	"time"
 
+	setsutil "github.com/platform9/ssh-provider/pkg/util/sets"
+
 	"github.com/platform9/cctl/pkg/util/clusterapi"
 	kubeadmutil "github.com/platform9/cctl/pkg/util/kubeadm"
 
@@ -247,28 +249,19 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 		if err != nil {
 			log.Fatalf("Unable to get machine %q API endpoint: %v", newMachine.Name, err)
 		}
+		apiEndpointSet := setsutil.NewAPIEndpointSet(cluster.Status.APIEndpoints...)
+		apiEndpointSet.Insert(*machineAPIEndpoint)
+		cluster.Status.APIEndpoints = apiEndpointSet.List()
+
+		// If VIP is configured, every machine should report the same API endpoint.
 		cspec, err = sputil.GetClusterSpec(*cluster)
 		if err != nil {
 			log.Fatalf("Unable to decode cluster spec: %v", err)
 		}
-
-		if cspec.VIPConfiguration != nil {
-			if len(cluster.Status.APIEndpoints) == 0 {
-				cluster.Status.APIEndpoints = append(cluster.Status.APIEndpoints, *machineAPIEndpoint)
-			} else {
-				// If there is a VIP, each master machine should report the same endpoint.
-				if cluster.Status.APIEndpoints[0] != *machineAPIEndpoint {
-					log.Fatalf("Internal error: the cluster endpoint (%s:%d) reported by machine %s should be (%s:%d).", machineAPIEndpoint.Host, machineAPIEndpoint.Port, newMachine.Name, cluster.Status.APIEndpoints[0].Host, cluster.Status.APIEndpoints[0].Port)
-				}
-			}
-		} else {
-			if len(cluster.Status.APIEndpoints) == 0 {
-				cluster.Status.APIEndpoints = append(cluster.Status.APIEndpoints, *machineAPIEndpoint)
-				// If there is no VIP, there should only be one master.
-			} else {
-				log.Fatalf("Internal error: this cluster has no VIP configured and already has one API endpoint.")
-			}
+		if apiEndpointSet.Has(*machineAPIEndpoint) && cspec.VIPConfiguration != nil {
+			log.Warnf("VIP is configured with IP %q, but machine %q reported an API endpoint IP %q", cspec.VIPConfiguration.IP, newMachine.Name, machineAPIEndpoint.Host)
 		}
+
 		_, err = state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).UpdateStatus(cluster)
 		if err != nil {
 			log.Fatalf("Unable to update cluster state: %v", err)
@@ -459,9 +452,11 @@ func deleteMachine(ip string, force bool, skipDrainDelete bool) {
 			log.Fatalf("unable to list machines: %v", err)
 		}
 		masters := clusterapi.MachinesWithRole(machines.Items, clustercommon.MasterRole)
-		// TODO(daniel) Store the API endpoint the machine reports in Machine.ProviderStatus,
-		// and remove that endpoint from the cluster API endpoints. For now, assume there is
-		// only one endpoint; if all master machines were deleted, delete the endpoint.
+		// It may not possible to identify the endpoint for the machine being
+		// deleted, e.g. if the machine is failed and `kubeadm config view`
+		// cannot be invoked. For now, assume there is only one endpoint, and
+		// delete it after the last master is deleted.
+		// See https://github.com/platform9/ssh-provider/issues/67
 		if len(masters) == 0 {
 			cluster.Status.APIEndpoints = []clusterv1.APIEndpoint{}
 		}
