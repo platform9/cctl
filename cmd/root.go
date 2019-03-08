@@ -38,9 +38,9 @@ var rootCmd = &cobra.Command{
 	PreRun: func(cmd *cobra.Command, args []string) {
 		InitState()
 	},
-	Long: `Platform9 tool for Kubernetes cluster management.
+	Long: `CLI tool for Kubernetes cluster management.
 This tool lets you create, scale, backup and restore
-your on-premise Kubernetes cluster.`,
+your air-gapped, on-premise Kubernetes cluster.`,
 }
 
 func Execute() {
