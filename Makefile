@@ -1,4 +1,4 @@
-# Copyright (c) 2018 Platform9 Systems, Inc.
+# Copyright 2019 The cctl authors.
 #
 # Usage:
 # make                 # builds the artifact
