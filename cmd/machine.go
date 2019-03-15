@@ -26,6 +26,8 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/coreos/go-semver/semver"
+
 	setsutil "github.com/platform9/ssh-provider/pkg/util/sets"
 
 	"github.com/platform9/cctl/pkg/util/clusterapi"
@@ -781,8 +783,28 @@ func isUpgradeRequired(old *spv1.MachineComponentVersions, cur *spv1.MachineComp
 type instanceStatus *clusterv1.Machine
 
 func getGoalMachine(currentMachine *clusterv1.Machine) (*clusterv1.Machine, error) {
+	currentMachineSpec, err := sputil.GetMachineSpec(*currentMachine)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to decode machine %q spec: %v", currentMachine.Name, err)
+	}
 	// Prepare goal machine object using current machine
 	goalMachine := currentMachine.DeepCopy()
+
+	// Actions required on upgrade
+	currentKubernetesVersion := semver.New(currentMachineSpec.ComponentVersions.KubernetesVersion)
+	// When upgrading from < 1.11
+	if currentKubernetesVersion.LessThan(*semver.New("1.11.0")) {
+		// Master machines need a workaround for https://github.com/kubernetes/kubeadm/issues/1358
+		if clusterutil.RoleContains(clustercommon.MasterRole, currentMachine.Spec.Roles) && len(currentMachine.Spec.Taints) == 0 {
+			goalMachine.Spec.Taints = []corev1.Taint{
+				{
+					Key:    common.LabelNodeRoleMaster,
+					Effect: corev1.TaintEffectPreferNoSchedule,
+				},
+			}
+		}
+	}
+
 	goalMachineSpec, err := sputil.GetMachineSpec(*goalMachine)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to decode machine %q spec: %v", goalMachine.Name, err)
