@@ -604,11 +604,44 @@ var clusterCmdUpgrade = &cobra.Command{
 		if err = upgradeMachines(nodes); err != nil {
 			log.Fatalf("Cluster upgrade failed with error: %v", err)
 		}
+		log.Printf("Performing post-upgrade tasks")
+		if err = postUpgradeTasks(masters); err != nil {
+			log.Fatalf("Cluster upgrade failed with error: %v", err)
+		}
 		if err := state.PullFromAPIs(); err != nil {
 			log.Fatalf("Unable to sync on-disk state: %v", err)
 		}
 		log.Printf("Cluster upgraded successfully")
 	},
+}
+
+func postUpgradeTasks(masters []clusterv1.Machine) error {
+	// Actions required on upgrade
+	someMaster := masters[0]
+	someMasterSpec, err := sputil.GetMachineSpec(someMaster)
+	if err != nil {
+		return fmt.Errorf("Unable to decode machine %q spec: %v", someMaster.Name, err)
+	}
+	someMasterStatus, err := sputil.GetMachineStatus(someMaster)
+	if err != nil {
+		return fmt.Errorf("Unable to decode machine %q status: %v", someMaster.Name, err)
+	}
+	currentKubernetesVersion := semver.New(someMasterSpec.ComponentVersions.KubernetesVersion)
+	// When upgrading from < 1.11, or restarting a partially failed upgrade to 1.11
+	if currentKubernetesVersion.LessThan(*semver.New("1.12.0")) {
+		// Remove kube-dns deployment
+		log.Info("[post-upgrade] Removing kube-dns deployment")
+		machineClient, err := sshMachineClientFromSSHConfig(someMasterStatus.SSHConfig)
+		if err != nil {
+			return fmt.Errorf("unable to create machine client for machine %q: %v", someMaster.Name, err)
+		}
+		cmd := fmt.Sprintf(`%s --kubeconfig=%s -nkube-system delete --ignore-not-found=true deployment kube-dns`, common.KubectlFile, common.AdminKubeconfig)
+		stdOut, stdErr, err := machineClient.RunCommand(cmd)
+		if err != nil {
+			return fmt.Errorf("error running %q: %v (%s) (%s)", cmd, err, string(stdOut), string(stdErr))
+		}
+	}
+	return nil
 }
 
 func init() {
