@@ -42,7 +42,7 @@ const (
 	KubeletKubeconfig                   = "/etc/kubernetes/kubelet.conf"
 	DefaultNodeadmVersion               = "v0.2.0"
 	DefaultEtcdadmVersion               = "v0.1.1"
-	DefaultKubernetesVersion            = "1.11.7"
+	DefaultKubernetesVersion            = "1.11.9"
 	DefaultCNIVersion                   = "v0.6.0"
 	DefaultFlannelVersion               = "v0.10.0"
 	DefaultKeepalivedVersion            = "v2.0.4"
