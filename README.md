@@ -2,10 +2,10 @@
 
 cctl is a cluster lifecycle management tool that adopts the Kubernetes community's Cluster API and uses nodeadm and etcdadm to easily deploy and maintain highly-available Kubernetes clusters in on-premises, even air-gapped environments.  
 
-This tool along with [etcdadm](https://github.com/kubernetes-sigs/etcdadm) and [nodeadm](https://github.com/platform9/nodeadm) (klusterkit) lets you create, scale, backup and restore your air-gapped, on-premise Kubernetes cluster.
+Along with [etcdadm](https://github.com/kubernetes-sigs/etcdadm) and [nodeadm](https://github.com/platform9/nodeadm), this tool makes up _klusterkit_, which lets you create, scale, backup and restore your air-gapped, on-premise Kubernetes cluster.
 
 ## Features
-* Multi-master (K8s HA) support
+* Highly-available Kubernetes control plane and etcd
 * Deploy & manage secure etcd clusters
 * Works in air-gapped environments
 * Rolling upgrade support with rollback capability
