@@ -412,7 +412,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:5956ae405a8681c6c263bd5571bb0649516f6f05fd9db8ebff67825c7655e886"
+  digest = "1:d59c097207c29fe587d3d70d4260e1639a6088b31af59d884a0f55d504582fd7"
   name = "github.com/platform9/ssh-provider"
   packages = [
     "constants",
@@ -441,7 +441,7 @@
     "pkg/util/sets",
   ]
   pruneopts = "UT"
-  revision = "47273c3d2e8d7ff71f05afc3ba3bf8f97e921ce6"
+  revision = "6a44a8b5d63c7e0f8a11f75bb70e3badbabb4146"
 
 [[projects]]
   digest = "1:b6221ec0f8903b556e127c449e7106b63e6867170c2d10a7c058623d086f2081"
