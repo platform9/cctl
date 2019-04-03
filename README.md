@@ -6,11 +6,11 @@ This tool along with [etcdadm](https://github.com/kubernetes-sigs/etcdadm) and [
 
 ## Features
 * Multi-master (K8s HA) support
-* Deploy & manage secure etcd clusters or use your own etcd cluster (BYO-etcd)
+* Deploy & manage secure etcd clusters
 * Works in air-gapped environments
 * Rolling upgrade support with rollback capability
 * Flannel (vxlan) CNI backend with plans to support other CNI backends
-* Enterprise-grade backup & recovery of etcd clusters from quorum loss
+* Backup & recovery of etcd clusters from quorum loss
 * Control plane protection from low memory/cpu situations
 
 ## Installation
