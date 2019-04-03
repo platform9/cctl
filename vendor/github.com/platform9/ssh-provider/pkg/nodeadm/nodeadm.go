@@ -41,6 +41,9 @@ func InitConfigurationForMachine(cluster clusterv1.Cluster, machine clusterv1.Ma
 				Kind:       "MasterConfiguration",
 				APIVersion: "kubeadm.k8s.io/v1alpha2",
 			},
+			APIServerExtraArgs:         make(map[string]string),
+			ControllerManagerExtraArgs: make(map[string]string),
+			SchedulerExtraArgs:         make(map[string]string),
 		},
 	}
 
@@ -97,19 +100,20 @@ func InitConfigurationForMachine(cluster clusterv1.Cluster, machine clusterv1.Ma
 // Depending on the parameter name this function sets
 // the MasterConfiguration fields or APIServerExtraArgs
 func setKubeAPIServerConfig(cfg *InitConfiguration, clusterConfig *spv1.ClusterConfig) error {
-	if clusterConfig.KubeAPIServer != nil {
-		// Set fields for API server manually as there is no upstream type yet.
-		// BindPort
-		bindPortStr, ok := clusterConfig.KubeAPIServer[spconstants.KubeAPIServerSecurePortKey]
-		if ok {
-			bindPort, err := strconv.ParseInt(bindPortStr, 10, 32)
-			if err != nil {
-				return fmt.Errorf("unable to parse port value: %s", bindPortStr)
-			}
-			cfg.MasterConfiguration.API.BindPort = int32(bindPort)
-			// delete as it should not be considered as an extra arg
-			delete(clusterConfig.KubeAPIServer, spconstants.KubeAPIServerSecurePortKey)
+	// Copy API server extra args
+	for k, v := range clusterConfig.KubeAPIServer {
+		cfg.MasterConfiguration.APIServerExtraArgs[k] = v
+	}
+	// Derive API bind port from `--secure-port`, if the flag is defined.
+	// Once derived, remove the flag.
+	bindPortStr, ok := cfg.MasterConfiguration.APIServerExtraArgs[spconstants.KubeAPIServerSecurePortKey]
+	if ok {
+		bindPort, err := strconv.ParseInt(bindPortStr, 10, 32)
+		if err != nil {
+			return fmt.Errorf("unable to parse port value: %s", bindPortStr)
 		}
+		cfg.MasterConfiguration.API.BindPort = int32(bindPort)
+		delete(cfg.MasterConfiguration.APIServerExtraArgs, spconstants.KubeAPIServerSecurePortKey)
 	}
 	return nil
 }
@@ -118,11 +122,17 @@ func setInitConfigFromClusterConfig(cfg *InitConfiguration, clusterConfig *spv1.
 	if err := setKubeAPIServerConfig(cfg, clusterConfig); err != nil {
 		return fmt.Errorf("unable to set configurable parameters for api-server: %v", err)
 	}
-	cfg.MasterConfiguration.ControllerManagerExtraArgs = clusterConfig.KubeControllerManager
+	// Copy controller-manager extra args
+	for k, v := range clusterConfig.KubeControllerManager {
+		cfg.MasterConfiguration.ControllerManagerExtraArgs[k] = v
+	}
+	// Copy scheduler extra args
+	for k, v := range clusterConfig.KubeScheduler {
+		cfg.MasterConfiguration.SchedulerExtraArgs[k] = v
+	}
 	if clusterConfig.KubeProxy != nil {
 		cfg.MasterConfiguration.KubeProxy.Config = clusterConfig.KubeProxy.DeepCopy()
 	}
-	cfg.MasterConfiguration.SchedulerExtraArgs = clusterConfig.KubeScheduler
 	if clusterConfig.Kubelet != nil {
 		cfg.MasterConfiguration.KubeletConfiguration.BaseConfig = clusterConfig.Kubelet.DeepCopy()
 	}
