@@ -43,7 +43,7 @@ $GOPATH/bin/cctl [command]
 
 If your setup has internet connectivity, follow these steps. For an airgapped environment, please see documentation [wiki](https://github.com/platform9/cctl/wiki).
 
-Ensure the correct version of the `nodeadm` and `etcdadm` binaries are placed in the `/opt/bin` directory of all nodes that will make up your cluster. 
+On all nodes that will make up your Kubernetes cluster, ensure docker container runtime is installed and active. Also ensure the correct version of the `nodeadm` binary is placed under `/var/cache/ssh-provider/etcdadm/<version>/` and `etcdadm` binary is placed under `/var/cache/ssh-provider/nodeadm/<version>/` directory. The nodeadm, etcdadm binary versions supported by a `cctl` release is specified in the release description. 
 
 First, create the credentials used for the cluster.
 ```
