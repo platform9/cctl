@@ -27,17 +27,17 @@ For developers:
 
 ## Quick Start !
 
-If you have a few VMs laying around and an SSH key, you can try out CCTL right now !
+If you have a few VMs laying around and an SSH key, you can try out CCTL right now !  
 ```
 # Create the credentials used for the cluster.  
 # Obviously, make sure your SSH key can get into the target nodes!
-cctl create credential --user root --private-key ~/.ssh/id_rsa
+cctl create credential --state ~/.cctl --user root --private-key ~/.ssh/id_rsa
 
 # Now create a cluster object. Use `--help` to see a list of supported flags. 
-cctl create cluster --pod-network 192.168.0.0/16 --service-network 192.169.0.0/24
+cctl create cluster --state ~/.cctl --pod-network 192.168.0.0/16 --service-network 192.169.0.0/24
 
 # Finally, bootstrap your cluster, via SSH.
-cctl create machine --ip $MACHINE_IP --role master
+cctl create machine --state ~/.cctl --ip $MACHINE_IP --role master
 ```
 
 ## Usage
