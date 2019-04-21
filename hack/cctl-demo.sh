@@ -10,7 +10,7 @@ function compilation() {
 	else
 		echo "First we'll compile the CCTL tool for OS X... "
 		pushd ../
-			OS=linux make container-build
+			make container-build
 			cp cctl* ./hack
 		popd
 	fi
