@@ -17,6 +17,9 @@ Along with [etcdadm](https://github.com/kubernetes-sigs/etcdadm) and [nodeadm](h
 ```
 go get -u github.com/platform9/cctl
 ```
+
+Quick demo: cd hack/ and follow the directions for the Vagrant recipe!
+
 ## Usage
 ```
 $GOPATH/bin/cctl [command]

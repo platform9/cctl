@@ -61,4 +61,4 @@ clean:
 	rm -rf $(BIN)
 
 test:
-	echo "skipping"
+	go test -v ./...
