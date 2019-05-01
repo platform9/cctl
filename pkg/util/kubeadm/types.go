@@ -16,12 +16,7 @@ limitations under the License.
 
 package kubeadm
 
-type MasterConfiguration struct {
-	API API `json:"api,omitempty"`
-}
-
-type API struct {
-	AdvertiseAddress     string `json:"advertiseAddress,omitempty"`
-	BindPort             int32  `json:"bindPort,omitempty"`
+// ClusterConfiguration is a subset of the equivalent kubeadm type
+type ClusterConfiguration struct {
 	ControlPlaneEndpoint string `json:"controlPlaneEndpoint,omitempty"`
 }
