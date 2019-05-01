@@ -604,12 +604,12 @@ func apiEndpointFromMachine(machine *clusterv1.Machine, provisionedMachine *spv1
 		log.Println(stdErr)
 		return nil, fmt.Errorf("unable to run `kubeadm config view` on %q: %v", machine.Name, err)
 	}
-	masterConfig := kubeadmutil.MasterConfiguration{}
+	masterConfig := kubeadmutil.ClusterConfiguration{}
 	err = yaml.Unmarshal(stdOut, &masterConfig)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read kubeconfig from machine %q:%v", machine.Name, err)
 	}
-	apiEndpoint, err := kubeadmutil.APIEndpointFromMasterConfiguration(&masterConfig)
+	apiEndpoint, err := kubeadmutil.APIEndpointFromClusterConfiguration(&masterConfig)
 	if err != nil {
 		return nil, fmt.Errorf("unable to derive API endpoint from `kubeadm config view` on %q: %v", machine.Name, err)
 	}
