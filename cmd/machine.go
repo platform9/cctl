@@ -19,6 +19,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path"
 	"strconv"
@@ -27,21 +28,17 @@ import (
 	"time"
 
 	"github.com/coreos/go-semver/semver"
+	"github.com/ghodss/yaml"
+	"github.com/google/go-cmp/cmp"
+	"github.com/spf13/cobra"
+	"golang.org/x/crypto/ssh"
 
 	setsutil "github.com/platform9/ssh-provider/pkg/util/sets"
 
+	"github.com/platform9/cctl/common"
+	log "github.com/platform9/cctl/pkg/logrus"
 	"github.com/platform9/cctl/pkg/util/clusterapi"
 	kubeadmutil "github.com/platform9/cctl/pkg/util/kubeadm"
-
-	log "github.com/platform9/cctl/pkg/logrus"
-
-	"golang.org/x/crypto/ssh"
-
-	"github.com/ghodss/yaml"
-
-	"github.com/spf13/cobra"
-
-	"github.com/platform9/cctl/common"
 	sshutil "github.com/platform9/cctl/pkg/util/ssh"
 
 	spv1 "github.com/platform9/ssh-provider/pkg/apis/sshprovider/v1alpha1"
@@ -53,7 +50,6 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	clusterutil "sigs.k8s.io/cluster-api/pkg/util"
 
-	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -263,22 +259,23 @@ func createMachine(ip string, port int, iface string, roleString string, publicK
 			}
 		}
 		// Update cluster API endpoints
-		machineAPIEndpoint, err := apiEndpointFromMachine(newMachine, newProvisionedMachine)
+		var apiEndpoint *clusterv1.APIEndpoint
+		// Use the controlPlaneEndpoint if it is defined
+		apiEndpoint, err = controlPlaneEndpointFromMachine(newMachine, newProvisionedMachine)
 		if err != nil {
-			log.Fatalf("Unable to get machine %q API endpoint: %v", newMachine.Name, err)
+			if err.Error() != "controlPlaneEndpoint is not defined" {
+				log.Fatalf("Unable to get machine %q control plane endpoint: %v", newMachine.Name, err)
+			}
+			// If control plane endpoint is not defined, use the machine's advertised API address and port
+			apiEndpoint, err = apiEndpointFromMachine(newMachine, newProvisionedMachine)
+			if err != nil {
+				log.Fatalf("Unable to get machine %q advertised API address and port: %v", newMachine.Name, err)
+			}
 		}
-		apiEndpointSet := setsutil.NewAPIEndpointSet(cluster.Status.APIEndpoints...)
-		apiEndpointSet.Insert(*machineAPIEndpoint)
-		cluster.Status.APIEndpoints = apiEndpointSet.List()
 
-		// If VIP is configured, every machine should report the same API endpoint.
-		cspec, err = sputil.GetClusterSpec(*cluster)
-		if err != nil {
-			log.Fatalf("Unable to decode cluster spec: %v", err)
-		}
-		if apiEndpointSet.Has(*machineAPIEndpoint) && cspec.VIPConfiguration != nil {
-			log.Warnf("VIP is configured with IP %q, but machine %q reported an API endpoint IP %q", cspec.VIPConfiguration.IP, newMachine.Name, machineAPIEndpoint.Host)
-		}
+		apiEndpointSet := setsutil.NewAPIEndpointSet(cluster.Status.APIEndpoints...)
+		apiEndpointSet.Insert(*apiEndpoint)
+		cluster.Status.APIEndpoints = apiEndpointSet.List()
 
 		_, err = state.ClusterClient.ClusterV1alpha1().Clusters(common.DefaultNamespace).UpdateStatus(cluster)
 		if err != nil {
@@ -591,29 +588,64 @@ func masterMachineAndProvisionedMachine() (*clusterv1.Machine, *spv1.Provisioned
 	return masterMachine, masterProvisionedMachine.DeepCopy(), nil
 }
 
-// apiEndpointFromMachine returns a cluster API endpoint by invoking `kubeadm
-// config view` on the machine.
+// controlPlaneEndpointFromMachine returns the advertised API address and port
+// of the API server on the machine
+func controlPlaneEndpointFromMachine(machine *clusterv1.Machine, provisionedMachine *spv1.ProvisionedMachine) (*clusterv1.APIEndpoint, error) {
+	machineClient, err := sshMachineClientFromSSHConfig(provisionedMachine.Spec.SSHConfig)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create machine client for machine %q: %v", machine.Name, err)
+	}
+
+	cmd := `/opt/bin/kubeadm config view`
+	stdOut, stdErr, err := machineClient.RunCommand(cmd)
+	if err != nil {
+		log.Println(stdOut)
+		log.Println(stdErr)
+		return nil, fmt.Errorf("unable to run %q on %q: %v", cmd, machine.Name, err)
+	}
+	kcc := kubeadmutil.ClusterConfiguration{}
+	err = yaml.Unmarshal(stdOut, &kcc)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read kubeadm ClusterConfiguration from machine %q:%v", machine.Name, err)
+	}
+	return kubeadmutil.APIEndpointFromClusterConfiguration(&kcc)
+}
+
+// apiEndpointFromMachine returns the advertised API address and port of the API
+// server on the machine
 func apiEndpointFromMachine(machine *clusterv1.Machine, provisionedMachine *spv1.ProvisionedMachine) (*clusterv1.APIEndpoint, error) {
 	machineClient, err := sshMachineClientFromSSHConfig(provisionedMachine.Spec.SSHConfig)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create machine client for machine %q: %v", machine.Name, err)
 	}
-	stdOut, stdErr, err := machineClient.RunCommand("/opt/bin/kubeadm config view")
+	cmd := `grep -oP -- '--advertise-address=\K([0-9]{0,3}\.[0-9]{0,3}\.[0-9]{0,3}\.[0-9]{0,3})' /etc/kubernetes/manifests/kube-apiserver.yaml`
+	stdOut, stdErr, err := machineClient.RunCommand(cmd)
 	if err != nil {
 		log.Println(stdOut)
 		log.Println(stdErr)
-		return nil, fmt.Errorf("unable to run `kubeadm config view` on %q: %v", machine.Name, err)
+		return nil, fmt.Errorf("unable to run %q on %q: %v", cmd, machine.Name, err)
 	}
-	masterConfig := kubeadmutil.ClusterConfiguration{}
-	err = yaml.Unmarshal(stdOut, &masterConfig)
+	apiAddr := net.ParseIP(strings.TrimSpace(string(stdOut)))
+	if apiAddr == nil {
+		return nil, fmt.Errorf("unable to parse advertised API address from %q", string(stdOut))
+	}
+
+	cmd = `grep -oP -- '--secure-port=\K([0-9]{1,5})' /etc/kubernetes/manifests/kube-apiserver.yaml`
+	stdOut, stdErr, err = machineClient.RunCommand(cmd)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read kubeconfig from machine %q:%v", machine.Name, err)
+		log.Println(stdOut)
+		log.Println(stdErr)
+		return nil, fmt.Errorf("unable to run %q on %q: %v", cmd, machine.Name, err)
 	}
-	apiEndpoint, err := kubeadmutil.APIEndpointFromClusterConfiguration(&masterConfig)
+	apiPort, err := strconv.Atoi(strings.TrimSpace(string(stdOut)))
 	if err != nil {
-		return nil, fmt.Errorf("unable to derive API endpoint from `kubeadm config view` on %q: %v", machine.Name, err)
+		return nil, fmt.Errorf("unable to parse API secure port from %q", string(stdOut))
 	}
-	return apiEndpoint, nil
+
+	return &clusterv1.APIEndpoint{
+		Host: apiAddr.String(),
+		Port: apiPort,
+	}, nil
 }
 
 func tokenAndCAHashFromKubeadmJoinCommand(cmdStdout string) (string, string, error) {
