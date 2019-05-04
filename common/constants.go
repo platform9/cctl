@@ -40,7 +40,7 @@ const (
 	KubectlFile                         = "/opt/bin/kubectl"
 	AdminKubeconfig                     = "/etc/kubernetes/admin.conf"
 	KubeletKubeconfig                   = "/etc/kubernetes/kubelet.conf"
-	DefaultNodeadmVersion               = "v0.2.1"
+	DefaultNodeadmVersion               = "v0.3.0"
 	DefaultEtcdadmVersion               = "v0.1.1"
 	DefaultKubernetesVersion            = "1.12.8"
 	DefaultCNIVersion                   = "v0.6.0"
